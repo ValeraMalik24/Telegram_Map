@@ -116,6 +116,8 @@ function destinationPoint(lat, lon, brng, distKm) {
 map.on('click', e => {
   if (!selectedType) return;
 
+  const index = drones.length;
+
   const marker = L.rotatedMarker(e.latlng, {
     icon: icons[selectedType],
     draggable: true,
@@ -124,6 +126,7 @@ map.on('click', e => {
   }).addTo(map);
 
   const drone = { marker, path: [], arrow: null, heading: 0, lastPos: e.latlng };
+  drones.push(drone);
 
   marker.on('dragstart', () => drone.lastPos = marker.getLatLng());
 
@@ -137,12 +140,11 @@ map.on('click', e => {
   const popup = L.popup().setContent(`
     <b>${selectedType.toUpperCase()}</b><br>
     Курс (0–359°): <input id="headingInput" type="number" min="0" max="359" style="width: 60px;" value="0" /><br>
-    <button onclick="updateHeadingFromPopup(${drones.length})">OK</button>
-    <button onclick="removeDrone(${drones.length})">Видалити</button>
+    <button onclick="updateHeadingFromPopup(${index})">OK</button>
+    <button onclick="removeDrone(${index})">Видалити</button>
   `);
 
   marker.bindPopup(popup).openPopup();
-  drones.push(drone);
 });
 
 function updateHeadingFromPopup(index) {
