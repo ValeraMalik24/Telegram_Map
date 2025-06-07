@@ -7,27 +7,18 @@
 
   <link rel="stylesheet" href="leaflet.css" />
   <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-    }
-
-    #map {
-      height: 100vh;
-      width: 100vw;
-    }
-
+    html, body { margin: 0; padding: 0; }
+    #map { height: 100vh; width: 100vw; }
     .menu {
       position: absolute;
       top: 10px;
       left: 10px;
-      background: rgba(255, 255, 255, 0.85);
+      background: rgba(255, 255, 255, 0.9);
       padding: 6px;
       border-radius: 6px;
       box-shadow: 0 0 4px #0003;
       z-index: 1000;
     }
-
     .menu button {
       background: none;
       border: none;
@@ -35,10 +26,9 @@
       padding: 0;
       cursor: pointer;
     }
-
     .menu img {
-      width: 30px;
-      height: 30px;
+      width: 40px;
+      height: 40px;
       border: 1px solid #ccc;
       border-radius: 4px;
     }
@@ -58,106 +48,104 @@
 
 <script src="leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/bbecquet/Leaflet.RotatedMarker/leaflet.rotatedMarker.js"></script>
-
 <script>
   const map = L.map('map').setView([49.9, 36.3], 10);
-
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 18,
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
 
   const icons = {
-    shahed:   L.icon({ iconUrl: 'shahed.png', iconSize: [30, 30] }),
-    orlan:    L.icon({ iconUrl: 'orlan.png', iconSize: [30, 30] }),
-    zala:     L.icon({ iconUrl: 'zala.png', iconSize: [30, 30] }),
-    molniya:  L.icon({ iconUrl: 'molniya.png', iconSize: [30, 30] }),
-    lancet:   L.icon({ iconUrl: 'lancet.png', iconSize: [30, 30] }),
-    supercam: L.icon({ iconUrl: 'supercam.png', iconSize: [30, 30] }),
-    unknown:  L.icon({ iconUrl: 'unknown.png', iconSize: [30, 30] })
+    shahed:   L.icon({ iconUrl: 'shahed.png', iconSize: [46, 46] }),
+    orlan:    L.icon({ iconUrl: 'orlan.png', iconSize: [46, 46] }),
+    zala:     L.icon({ iconUrl: 'zala.png', iconSize: [46, 46] }),
+    molniya:  L.icon({ iconUrl: 'molniya.png', iconSize: [46, 46] }),
+    lancet:   L.icon({ iconUrl: 'lancet.png', iconSize: [46, 46] }),
+    supercam: L.icon({ iconUrl: 'supercam.png', iconSize: [46, 46] }),
+    unknown:  L.icon({ iconUrl: 'unknown.png', iconSize: [46, 46] })
   };
 
   let selectedIcon = null;
-  let currentMarker = null;
-  let currentArrow = null;
+  const bplaMarkers = [];
 
   function selectIcon(name) {
     selectedIcon = name;
   }
 
-  function addArrow(fromLatLng, angle) {
-    const length = 1000; // meters
-    const toLatLng = computeDestinationPoint(fromLatLng, angle, length);
+  map.on('click', function (e) {
+    if (!selectedIcon) return;
 
-    const arrow = L.polyline([fromLatLng, toLatLng], {
-      color: 'red',
-      weight: 4,
-      opacity: 0.9,
-      className: 'heading-arrow'
-    }).addTo(map);
-
-    return arrow;
-  }
-
-  function computeDestinationPoint(start, bearing, distance) {
-    const R = 6371e3;
-    const φ1 = start.lat * Math.PI / 180;
-    const λ1 = start.lng * Math.PI / 180;
-    const θ = bearing * Math.PI / 180;
-    const δ = distance / R;
-
-    const φ2 = Math.asin(Math.sin(φ1) * Math.cos(δ) + Math.cos(φ1) * Math.sin(δ) * Math.cos(θ));
-    const λ2 = λ1 + Math.atan2(Math.sin(θ) * Math.sin(δ) * Math.cos(φ1),
-                               Math.cos(δ) - Math.sin(φ1) * Math.sin(φ2));
-
-    return L.latLng(φ2 * 180 / Math.PI, λ2 * 180 / Math.PI);
-  }
-
-  map.on('click', function(e) {
-    if (!selectedIcon) {
-      alert("Спочатку обери тип БПЛА.");
-      return;
-    }
-
-    if (currentMarker) map.removeLayer(currentMarker);
-    if (currentArrow) map.removeLayer(currentArrow);
-
-    currentMarker = L.marker(e.latlng, {
+    const latlng = e.latlng;
+    const marker = L.marker(latlng, {
       icon: icons[selectedIcon] || icons.unknown,
       draggable: true,
       rotationAngle: 0,
       rotationOrigin: 'center'
     }).addTo(map);
 
-    currentMarker.bindPopup(`
-      <b>${selectedIcon.toUpperCase()}</b><br>
-      Курс (0–359°): <input id="headingInput" type="number" min="0" max="359" value="0" /><br>
-      <button onclick="applyHeading()">OK</button>
-      <button onclick="deleteTarget()">Видалити</button>
-    `).openPopup();
+    const bplaData = { marker, arrow: null, heading: null };
+    bplaMarkers.push(bplaData);
+
+    const popupContent = document.createElement('div');
+    popupContent.innerHTML = `
+      <strong>${selectedIcon.toUpperCase()}</strong><br>
+      Курс (0–359°): <input type="number" id="headingInput" min="0" max="359" style="width: 60px" /><br>
+      <button onclick="updateHeading(${bplaMarkers.length - 1})">ОК</button>
+      <button onclick="removeBPLA(${bplaMarkers.length - 1})">Видалити</button>
+    `;
+
+    marker.bindPopup(popupContent).openPopup();
+
+    marker.on('dragend', () => {
+      if (bplaData.arrow) map.removeLayer(bplaData.arrow);
+      if (bplaData.heading !== null) {
+        drawArrow(marker.getLatLng(), bplaData.heading, bplaData);
+      }
+    });
+
+    selectedIcon = null;
   });
 
-  function applyHeading() {
-    const input = document.getElementById("headingInput");
-    const heading = parseFloat(input.value);
+  function updateHeading(index) {
+    const data = bplaMarkers[index];
+    const headingInput = document.getElementById('headingInput');
+    const heading = parseFloat(headingInput.value);
     if (isNaN(heading)) return;
 
-    currentMarker.setRotationAngle(heading - 45);
+    const marker = data.marker;
+    marker.setRotationAngle(heading - 45);
+    data.heading = heading;
 
-    if (currentArrow) map.removeLayer(currentArrow);
-    currentArrow = addArrow(currentMarker.getLatLng(), heading);
-    currentMarker.closePopup();
+    if (data.arrow) map.removeLayer(data.arrow);
+    drawArrow(marker.getLatLng(), heading, data);
+
+    marker.closePopup();
   }
 
-  function deleteTarget() {
-    if (currentMarker) {
-      map.removeLayer(currentMarker);
-      currentMarker = null;
-    }
-    if (currentArrow) {
-      map.removeLayer(currentArrow);
-      currentArrow = null;
-    }
+  function removeBPLA(index) {
+    const data = bplaMarkers[index];
+    map.removeLayer(data.marker);
+    if (data.arrow) map.removeLayer(data.arrow);
+    bplaMarkers[index] = null;
+  }
+
+  function drawArrow(latlng, heading, data) {
+    const distance = 0.015; // км
+    const rad = heading * Math.PI / 180;
+    const destLat = latlng.lat + distance * Math.cos(rad);
+    const destLng = latlng.lng + distance * Math.sin(rad);
+
+    const arrowHead = L.polyline([
+      latlng,
+      [destLat, destLng]
+    ], {
+      color: 'red',
+      weight: 4,
+      opacity: 0.8,
+      dashArray: '5,2'
+    }).addTo(map);
+
+    data.arrow = arrowHead;
   }
 </script>
 
