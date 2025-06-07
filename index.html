@@ -37,35 +37,27 @@
     }
 
     .menu img {
-      width: 32px;
-      height: 32px;
+      width: 30px;
+      height: 30px;
       border: 1px solid #ccc;
       border-radius: 4px;
-    }
-
-    .popup-input {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
     }
   </style>
 </head>
 <body>
 
 <div id="map"></div>
-
 <div class="menu">
-  <button onclick="selectIcon('shahed')"><img src="shahed.png" alt="Shahed" title="Shahed" /></button>
-  <button onclick="selectIcon('orlan')"><img src="orlan.png" alt="Orlan" title="Orlan" /></button>
-  <button onclick="selectIcon('zala')"><img src="zala.png" alt="Zala" title="Zala" /></button>
-  <button onclick="selectIcon('molniya')"><img src="molniya.png" alt="Molniya" title="Molniya" /></button>
-  <button onclick="selectIcon('lancet')"><img src="lancet.png" alt="Lancet" title="Lancet" /></button>
-  <button onclick="selectIcon('supercam')"><img src="supercam.png" alt="Supercam" title="Supercam" /></button>
+  <button onclick="selectIcon('shahed')"><img src="shahed.png" /></button>
+  <button onclick="selectIcon('orlan')"><img src="orlan.png" /></button>
+  <button onclick="selectIcon('zala')"><img src="zala.png" /></button>
+  <button onclick="selectIcon('molniya')"><img src="molniya.png" /></button>
+  <button onclick="selectIcon('lancet')"><img src="lancet.png" /></button>
+  <button onclick="selectIcon('supercam')"><img src="supercam.png" /></button>
 </div>
 
 <script src="leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/bbecquet/Leaflet.RotatedMarker/leaflet.rotatedMarker.js"></script>
-<script src="https://unpkg.com/leaflet-arrowheads@1.0.7/leaflet-arrowheads.min.js"></script>
 
 <script>
   const map = L.map('map').setView([49.9, 36.3], 10);
@@ -76,22 +68,49 @@
   }).addTo(map);
 
   const icons = {
-    shahed:   L.icon({ iconUrl: 'shahed.png', iconSize: [30, 30], iconAnchor: [15, 15] }),
-    orlan:    L.icon({ iconUrl: 'orlan.png', iconSize: [30, 30], iconAnchor: [15, 15] }),
-    zala:     L.icon({ iconUrl: 'zala.png', iconSize: [30, 30], iconAnchor: [15, 15] }),
-    molniya:  L.icon({ iconUrl: 'molniya.png', iconSize: [30, 30], iconAnchor: [15, 15] }),
-    lancet:   L.icon({ iconUrl: 'lancet.png', iconSize: [30, 30], iconAnchor: [15, 15] }),
-    supercam: L.icon({ iconUrl: 'supercam.png', iconSize: [30, 30], iconAnchor: [15, 15] }),
-    unknown:  L.icon({ iconUrl: 'unknown.png', iconSize: [30, 30], iconAnchor: [15, 15] })
+    shahed:   L.icon({ iconUrl: 'shahed.png', iconSize: [30, 30] }),
+    orlan:    L.icon({ iconUrl: 'orlan.png', iconSize: [30, 30] }),
+    zala:     L.icon({ iconUrl: 'zala.png', iconSize: [30, 30] }),
+    molniya:  L.icon({ iconUrl: 'molniya.png', iconSize: [30, 30] }),
+    lancet:   L.icon({ iconUrl: 'lancet.png', iconSize: [30, 30] }),
+    supercam: L.icon({ iconUrl: 'supercam.png', iconSize: [30, 30] }),
+    unknown:  L.icon({ iconUrl: 'unknown.png', iconSize: [30, 30] })
   };
 
   let selectedIcon = null;
-  let pendingMarker = null;
-  const markers = [];
+  let currentMarker = null;
+  let currentArrow = null;
 
   function selectIcon(name) {
     selectedIcon = name;
-    alert(`Вибрано тип: ${name.toUpperCase()}. Тепер клацни на мапі.`);
+  }
+
+  function addArrow(fromLatLng, angle) {
+    const length = 1000; // meters
+    const toLatLng = computeDestinationPoint(fromLatLng, angle, length);
+
+    const arrow = L.polyline([fromLatLng, toLatLng], {
+      color: 'red',
+      weight: 4,
+      opacity: 0.9,
+      className: 'heading-arrow'
+    }).addTo(map);
+
+    return arrow;
+  }
+
+  function computeDestinationPoint(start, bearing, distance) {
+    const R = 6371e3;
+    const φ1 = start.lat * Math.PI / 180;
+    const λ1 = start.lng * Math.PI / 180;
+    const θ = bearing * Math.PI / 180;
+    const δ = distance / R;
+
+    const φ2 = Math.asin(Math.sin(φ1) * Math.cos(δ) + Math.cos(φ1) * Math.sin(δ) * Math.cos(θ));
+    const λ2 = λ1 + Math.atan2(Math.sin(θ) * Math.sin(δ) * Math.cos(φ1),
+                               Math.cos(δ) - Math.sin(φ1) * Math.sin(φ2));
+
+    return L.latLng(φ2 * 180 / Math.PI, λ2 * 180 / Math.PI);
   }
 
   map.on('click', function(e) {
@@ -100,65 +119,45 @@
       return;
     }
 
-    const marker = L.marker(e.latlng, {
+    if (currentMarker) map.removeLayer(currentMarker);
+    if (currentArrow) map.removeLayer(currentArrow);
+
+    currentMarker = L.marker(e.latlng, {
       icon: icons[selectedIcon] || icons.unknown,
+      draggable: true,
       rotationAngle: 0,
       rotationOrigin: 'center'
     }).addTo(map);
 
-    pendingMarker = marker;
-
-    const popupContent = `
-      <div class="popup-input">
-        <label for="headingInput"><b>${selectedIcon.toUpperCase()}</b><br>Курс (0–359°):</label>
-        <input id="headingInput" type="number" min="0" max="359" placeholder="Курс" style="width: 100px;" />
-        <button onclick="setHeading()">OK</button>
-        <button onclick="removeMarker()">Видалити</button>
-      </div>`;
-
-    marker.bindPopup(popupContent).openPopup();
-    markers.push(marker);
-
-    selectedIcon = null;
+    currentMarker.bindPopup(`
+      <b>${selectedIcon.toUpperCase()}</b><br>
+      Курс (0–359°): <input id="headingInput" type="number" min="0" max="359" value="0" /><br>
+      <button onclick="applyHeading()">OK</button>
+      <button onclick="deleteTarget()">Видалити</button>
+    `).openPopup();
   });
 
-  function setHeading() {
+  function applyHeading() {
     const input = document.getElementById("headingInput");
     const heading = parseFloat(input.value);
-    if (isNaN(heading)) return alert("Некоректне значення курсу.");
+    if (isNaN(heading)) return;
 
-    const rotation = heading - 45;
-    pendingMarker.setRotationAngle(rotation);
+    currentMarker.setRotationAngle(heading - 45);
 
-    const latlng = pendingMarker.getLatLng();
-    const endPoint = computeDestinationPoint(latlng.lat, latlng.lng, heading, 2000);
-    const arrow = L.polyline([latlng, endPoint], {color: 'red', weight: 4}).addTo(map);
-    arrow.arrowheads({size: '15px', frequency: 'end'});
-
-    pendingMarker.closePopup();
-    pendingMarker = null;
+    if (currentArrow) map.removeLayer(currentArrow);
+    currentArrow = addArrow(currentMarker.getLatLng(), heading);
+    currentMarker.closePopup();
   }
 
-  function removeMarker() {
-    if (pendingMarker) {
-      map.removeLayer(pendingMarker);
-      pendingMarker = null;
+  function deleteTarget() {
+    if (currentMarker) {
+      map.removeLayer(currentMarker);
+      currentMarker = null;
     }
-  }
-
-  function computeDestinationPoint(lat, lon, bearing, distance) {
-    const R = 6371e3;
-    const φ1 = lat * Math.PI / 180;
-    const λ1 = lon * Math.PI / 180;
-    const θ = bearing * Math.PI / 180;
-    const δ = distance / R;
-
-    const φ2 = Math.asin(Math.sin(φ1) * Math.cos(δ) +
-                         Math.cos(φ1) * Math.sin(δ) * Math.cos(θ));
-    const λ2 = λ1 + Math.atan2(Math.sin(θ) * Math.sin(δ) * Math.cos(φ1),
-                               Math.cos(δ) - Math.sin(φ1) * Math.sin(φ2));
-
-    return L.latLng(φ2 * 180 / Math.PI, λ2 * 180 / Math.PI);
+    if (currentArrow) {
+      map.removeLayer(currentArrow);
+      currentArrow = null;
+    }
   }
 </script>
 
