@@ -89,6 +89,35 @@
       border-radius: 4px;
       cursor: pointer;
     }
+
+    .watermark {
+      position: absolute;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      background-image: repeating-linear-gradient(
+        45deg,
+        rgba(0, 0, 0, 0.03),
+        rgba(0, 0, 0, 0.03) 40px,
+        transparent 40px,
+        transparent 80px
+      );
+    }
+
+    .watermark::before {
+      content: "t.me/Troyanda_INFO";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      font-size: 36px;
+      color: rgba(0, 0, 0, 0.15);
+      transform: translate(-50%, -50%) rotate(-30deg);
+      white-space: nowrap;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
@@ -104,13 +133,16 @@
   </div>
 </div>
 
+<!-- Водяний знак -->
+<div class="watermark"></div>
+
 <!-- Мапа -->
 <div id="map"></div>
 
 <!-- Меню -->
 <div class="menu" id="menu">
   <div class="menu-item" data-type="shahed">
-    <button><img src="shahed.png" /></button><span>Shahed</span>
+    <button><img src="shahed.png" style="width: 36px; height: 36px;" /></button><span>Shahed</span>
   </div>
   <div class="menu-item" data-type="orlan">
     <button><img src="orlan.png" /></button><span>Orlan</span>
@@ -140,7 +172,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 }).addTo(map);
 
 const icons = {
-  shahed:   L.icon({ iconUrl: 'shahed.png', iconSize: [48, 48] }),
+  shahed:   L.icon({ iconUrl: 'shahed.png', iconSize: [36, 36] }), // ЗМЕНШЕНА
   orlan:    L.icon({ iconUrl: 'orlan.png', iconSize: [48, 48] }),
   zala:     L.icon({ iconUrl: 'zala.png', iconSize: [48, 48] }),
   molniya:  L.icon({ iconUrl: 'molniya.png', iconSize: [48, 48] }),
@@ -169,8 +201,7 @@ function destinationPoint(lat, lon, brng, distKm) {
 
 map.on('click', e => {
   if (!selectedType) return;
-
-  const marker = L.marker(e.latlng, {
+  const marker = L.rotatedMarker(e.latlng, {
     icon: icons[selectedType],
     draggable: true,
     rotationAngle: 0,
@@ -230,7 +261,6 @@ function removeDrone(index) {
   drones[index] = null;
 }
 
-// Авторизація
 function checkPassword() {
   const input = document.getElementById("authPassword").value;
   if (input === "4202") {
