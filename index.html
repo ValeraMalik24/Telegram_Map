@@ -52,18 +52,6 @@
   </style>
 </head>
 <body>
-
-<script>
-  function checkPassword() {
-    const pass = prompt("Введіть пароль для доступу до мапи:");
-    if (pass !== "4202") {
-      document.body.innerHTML = "<h2 style='text-align:center; margin-top:40vh;'>⛔ Доступ заборонено</h2>";
-      throw new Error("Access denied");
-    }
-  }
-  checkPassword();
-</script>
-
 <div id="map"></div>
 <div class="menu" id="menu">
   <div class="menu-item" data-type="shahed">
@@ -94,9 +82,8 @@
 
 <script src="leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/bbecquet/Leaflet.RotatedMarker/leaflet.rotatedMarker.js"></script>
-
 <script>
-let map = L.map('map').setView([49.9, 36.3], 10);
+const map = L.map('map').setView([49.9, 36.3], 10);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 18,
   attribution: '&copy; OpenStreetMap contributors'
