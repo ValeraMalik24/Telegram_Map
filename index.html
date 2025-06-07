@@ -65,6 +65,7 @@
 
 <script src="leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/bbecquet/Leaflet.RotatedMarker/leaflet.rotatedMarker.js"></script>
+<script src="https://unpkg.com/leaflet-arrowheads@1.0.7/leaflet-arrowheads.min.js"></script>
 
 <script>
   const map = L.map('map').setView([49.9, 36.3], 10);
@@ -75,17 +76,18 @@
   }).addTo(map);
 
   const icons = {
-    shahed:   L.icon({ iconUrl: 'shahed.png', iconSize: [40, 40], iconAnchor: [20, 20] }),
-    orlan:    L.icon({ iconUrl: 'orlan.png', iconSize: [40, 40], iconAnchor: [20, 20] }),
-    zala:     L.icon({ iconUrl: 'zala.png', iconSize: [40, 40], iconAnchor: [20, 20] }),
-    molniya:  L.icon({ iconUrl: 'molniya.png', iconSize: [40, 40], iconAnchor: [20, 20] }),
-    lancet:   L.icon({ iconUrl: 'lancet.png', iconSize: [40, 40], iconAnchor: [20, 20] }),
-    supercam: L.icon({ iconUrl: 'supercam.png', iconSize: [40, 40], iconAnchor: [20, 20] }),
-    unknown:  L.icon({ iconUrl: 'unknown.png', iconSize: [40, 40], iconAnchor: [20, 20] })
+    shahed:   L.icon({ iconUrl: 'shahed.png', iconSize: [30, 30], iconAnchor: [15, 15] }),
+    orlan:    L.icon({ iconUrl: 'orlan.png', iconSize: [30, 30], iconAnchor: [15, 15] }),
+    zala:     L.icon({ iconUrl: 'zala.png', iconSize: [30, 30], iconAnchor: [15, 15] }),
+    molniya:  L.icon({ iconUrl: 'molniya.png', iconSize: [30, 30], iconAnchor: [15, 15] }),
+    lancet:   L.icon({ iconUrl: 'lancet.png', iconSize: [30, 30], iconAnchor: [15, 15] }),
+    supercam: L.icon({ iconUrl: 'supercam.png', iconSize: [30, 30], iconAnchor: [15, 15] }),
+    unknown:  L.icon({ iconUrl: 'unknown.png', iconSize: [30, 30], iconAnchor: [15, 15] })
   };
 
   let selectedIcon = null;
   let pendingMarker = null;
+  const markers = [];
 
   function selectIcon(name) {
     selectedIcon = name;
@@ -111,9 +113,11 @@
         <label for="headingInput"><b>${selectedIcon.toUpperCase()}</b><br>Курс (0–359°):</label>
         <input id="headingInput" type="number" min="0" max="359" placeholder="Курс" style="width: 100px;" />
         <button onclick="setHeading()">OK</button>
+        <button onclick="removeMarker()">Видалити</button>
       </div>`;
 
     marker.bindPopup(popupContent).openPopup();
+    markers.push(marker);
 
     selectedIcon = null;
   });
@@ -127,11 +131,19 @@
     pendingMarker.setRotationAngle(rotation);
 
     const latlng = pendingMarker.getLatLng();
-    const endPoint = computeDestinationPoint(latlng.lat, latlng.lng, heading, 1000);
-    L.polyline([latlng, endPoint], {color: 'red', weight: 2}).addTo(map);
+    const endPoint = computeDestinationPoint(latlng.lat, latlng.lng, heading, 2000);
+    const arrow = L.polyline([latlng, endPoint], {color: 'red', weight: 4}).addTo(map);
+    arrow.arrowheads({size: '15px', frequency: 'end'});
 
     pendingMarker.closePopup();
     pendingMarker = null;
+  }
+
+  function removeMarker() {
+    if (pendingMarker) {
+      map.removeLayer(pendingMarker);
+      pendingMarker = null;
+    }
   }
 
   function computeDestinationPoint(lat, lon, bearing, distance) {
