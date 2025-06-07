@@ -4,24 +4,43 @@
   <meta charset="UTF-8" />
   <title>Telegram_Map</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
   <link rel="stylesheet" href="leaflet.css" />
-  <link rel="stylesheet" href="style.css" />
   <style>
-    #map { height: 100vh; width: 100vw; }
+    html, body {
+      margin: 0;
+      padding: 0;
+    }
+
+    #map {
+      height: 100vh;
+      width: 100vw;
+    }
+
     .menu {
       position: absolute;
       top: 10px;
       left: 10px;
+      background: rgba(255, 255, 255, 0.85);
+      padding: 6px;
+      border-radius: 6px;
+      box-shadow: 0 0 4px #0003;
       z-index: 1000;
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
     }
+
     .menu button {
-      background: white;
-      border: 1px solid gray;
-      padding: 4px;
+      background: none;
+      border: none;
+      margin: 2px;
+      padding: 0;
       cursor: pointer;
+    }
+
+    .menu img {
+      width: 32px;
+      height: 32px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
     }
   </style>
 </head>
@@ -30,16 +49,16 @@
 <div id="map"></div>
 
 <div class="menu">
-  <button onclick="selectIcon('shahed')">Shahed</button>
-  <button onclick="selectIcon('orlan')">Orlan</button>
-  <button onclick="selectIcon('zala')">Zala</button>
-  <button onclick="selectIcon('molniya')">Molniya</button>
-  <button onclick="selectIcon('lancet')">Lancet</button>
-  <button onclick="selectIcon('supercam')">Supercam</button>
+  <button onclick="selectIcon('shahed')"><img src="shahed.png" alt="Shahed" title="Shahed" /></button>
+  <button onclick="selectIcon('orlan')"><img src="orlan.png" alt="Orlan" title="Orlan" /></button>
+  <button onclick="selectIcon('zala')"><img src="zala.png" alt="Zala" title="Zala" /></button>
+  <button onclick="selectIcon('molniya')"><img src="molniya.png" alt="Molniya" title="Molniya" /></button>
+  <button onclick="selectIcon('lancet')"><img src="lancet.png" alt="Lancet" title="Lancet" /></button>
+  <button onclick="selectIcon('supercam')"><img src="supercam.png" alt="Supercam" title="Supercam" /></button>
 </div>
 
 <script src="leaflet.js"></script>
-<script src="https://rawcdn.githack.com/bbecquet/Leaflet.RotatedMarker/master/leaflet.rotatedMarker.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/bbecquet/Leaflet.RotatedMarker/leaflet.rotatedMarker.js"></script>
 
 <script>
   const map = L.map('map').setView([49.9, 36.3], 10);
@@ -63,29 +82,33 @@
 
   function selectIcon(name) {
     selectedIcon = name;
-    alert(`Вибрано: ${name.toUpperCase()}. Натисни на карту, щоб поставити.`);
+    alert(`Вибрано тип: ${name.toUpperCase()}. Тепер натисни по мапі.`);
   }
 
   map.on('click', function(e) {
     if (!selectedIcon) {
-      alert("Оберіть тип БПЛА спочатку!");
+      alert("Спочатку обери тип БПЛА.");
       return;
     }
 
-    const heading = parseFloat(prompt("Введіть курс (0-359°):"));
-    if (isNaN(heading)) {
-      alert("Невірний курс.");
-      return;
-    }
-
-    L.marker(e.latlng, {
+    // Додаємо маркер одразу
+    const marker = L.marker(e.latlng, {
       icon: icons[selectedIcon] || icons.unknown,
-      rotationAngle: heading - 45,
+      rotationAngle: 0,
       rotationOrigin: 'center'
-    })
-    .addTo(map)
-    .bindPopup(`<b>${selectedIcon.toUpperCase()}</b><br>Курс: ${heading}°`)
-    .openPopup();
+    }).addTo(map);
+
+    marker.bindPopup(`<b>${selectedIcon.toUpperCase()}</b>`).openPopup();
+
+    // Потім запитуємо курс і оновлюємо маркер
+    setTimeout(() => {
+      const heading = parseFloat(prompt("Введіть курс (0–359°):"));
+      if (!isNaN(heading)) {
+        marker.setRotationAngle(heading - 45); // 45° — початковий нахил зображення
+        marker.setPopupContent(`<b>${selectedIcon.toUpperCase()}</b><br>Курс: ${heading}°`);
+        marker.openPopup();
+      }
+    }, 200);
 
     selectedIcon = null;
   });
