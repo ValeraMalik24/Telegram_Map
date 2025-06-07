@@ -42,6 +42,12 @@
       border: 1px solid #ccc;
       border-radius: 4px;
     }
+
+    .popup-input {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
   </style>
 </head>
 <body>
@@ -79,6 +85,7 @@
   };
 
   let selectedIcon = null;
+  let pendingMarker = null;
 
   function selectIcon(name) {
     selectedIcon = name;
@@ -97,22 +104,35 @@
       rotationOrigin: 'center'
     }).addTo(map);
 
-    const heading = prompt("Введіть курс (0–359°):", "0");
-    const angle = parseFloat(heading);
+    pendingMarker = marker;
 
-    if (!isNaN(angle)) {
-      marker.setRotationAngle(angle - 45);
+    const popupContent = `
+      <div class="popup-input">
+        <label for="headingInput"><b>${selectedIcon.toUpperCase()}</b><br>Курс (0–359°):</label>
+        <input id="headingInput" type="number" min="0" max="359" placeholder="Курс" style="width: 100px;" />
+        <button onclick="setHeading()">OK</button>
+      </div>`;
 
-      const endPoint = computeDestinationPoint(e.latlng.lat, e.latlng.lng, angle, 1000);
-      L.polyline([e.latlng, endPoint], {color: 'red', weight: 2}).addTo(map);
-
-      marker.bindPopup(`<b>${selectedIcon.toUpperCase()}</b><br>Курс: ${angle}°`).openPopup();
-    } else {
-      marker.bindPopup(`<b>${selectedIcon.toUpperCase()}</b><br>Курс: ?`).openPopup();
-    }
+    marker.bindPopup(popupContent).openPopup();
 
     selectedIcon = null;
   });
+
+  function setHeading() {
+    const input = document.getElementById("headingInput");
+    const heading = parseFloat(input.value);
+    if (isNaN(heading)) return alert("Некоректне значення курсу.");
+
+    const rotation = heading - 45;
+    pendingMarker.setRotationAngle(rotation);
+
+    const latlng = pendingMarker.getLatLng();
+    const endPoint = computeDestinationPoint(latlng.lat, latlng.lng, heading, 1000);
+    L.polyline([latlng, endPoint], {color: 'red', weight: 2}).addTo(map);
+
+    pendingMarker.closePopup();
+    pendingMarker = null;
+  }
 
   function computeDestinationPoint(lat, lon, bearing, distance) {
     const R = 6371e3;
