@@ -5,7 +5,6 @@ let targets = [
     lon: 36.353,
     type: "shahed",
     heading: 230,
-    radius: 8000
   },
   {
     id: "drone_2",
@@ -13,6 +12,5 @@ let targets = [
     lon: 36.711,
     type: "orlan",
     heading: 180,
-    radius: 5000
   }
 ];
