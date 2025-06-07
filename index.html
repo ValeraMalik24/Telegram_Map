@@ -74,7 +74,7 @@ function destinationPoint(lat, lon, brng, distKm) {
 map.on('click', e => {
   if (!selectedType) return;
 
-  const marker = L.rotatedMarker(e.latlng, {
+  const marker = L.marker(e.latlng, {
     icon: icons[selectedType],
     draggable: true,
     rotationAngle: 0,
@@ -102,7 +102,6 @@ map.on('click', e => {
   });
 
   const index = drones.length;
-
   marker.bindPopup(createPopupHTML(selectedType, index)).openPopup();
   drones.push(drone);
   selectedType = null;
@@ -141,7 +140,9 @@ function updateHeading(drone) {
     dashArray: "5,5"
   }).addTo(map);
 
-  drone.marker.setRotationAngle(drone.heading);
+  if (typeof drone.marker.setRotationAngle === 'function') {
+    drone.marker.setRotationAngle(drone.heading);
+  }
 }
 
 function removeDrone(index) {
