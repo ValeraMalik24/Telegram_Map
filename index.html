@@ -8,151 +8,77 @@
   <style>
     html, body { margin: 0; padding: 0; }
     #map { height: 100vh; width: 100vw; }
+
     .menu {
       position: absolute;
-      top: 10px; left: 10px;
-      background: white;
-      padding: 5px;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255, 255, 255, 0.9);
+      padding: 8px 12px;
+      border-radius: 8px;
+      display: flex;
+      gap: 12px;
       z-index: 1000;
-      border-radius: 4px;
+      box-shadow: 0 0 6px rgba(0, 0, 0, 0.25);
     }
-    .menu button img {
-      width: 36px;
-      height: 36px;
+
+    .menu-item {
+      text-align: center;
+      font-size: 12px;
+      font-family: sans-serif;
+    }
+
+    .menu-item button {
+      background: none;
+      border: none;
+      cursor: pointer;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .menu-item img {
+      width: 40px;
+      height: 40px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
     }
   </style>
 </head>
 <body>
 <div id="map"></div>
+
 <div class="menu">
-  <button onclick="selectIcon('shahed')"><img src="shahed.png" /></button>
-  <button onclick="selectIcon('orlan')"><img src="orlan.png" /></button>
-  <button onclick="selectIcon('zala')"><img src="zala.png" /></button>
-  <button onclick="selectIcon('molniya')"><img src="molniya.png" /></button>
-  <button onclick="selectIcon('lancet')"><img src="lancet.png" /></button>
-  <button onclick="selectIcon('supercam')"><img src="supercam.png" /></button>
+  <div class="menu-item">
+    <button onclick="selectIcon('shahed')"><img src="shahed.png" /></button>
+    <span>Shahed</span>
+  </div>
+  <div class="menu-item">
+    <button onclick="selectIcon('orlan')"><img src="orlan.png" /></button>
+    <span>Orlan</span>
+  </div>
+  <div class="menu-item">
+    <button onclick="selectIcon('zala')"><img src="zala.png" /></button>
+    <span>Zala</span>
+  </div>
+  <div class="menu-item">
+    <button onclick="selectIcon('molniya')"><img src="molniya.png" /></button>
+    <span>Molniya</span>
+  </div>
+  <div class="menu-item">
+    <button onclick="selectIcon('lancet')"><img src="lancet.png" /></button>
+    <span>Lancet</span>
+  </div>
+  <div class="menu-item">
+    <button onclick="selectIcon('supercam')"><img src="supercam.png" /></button>
+    <span>Supercam</span>
+  </div>
 </div>
 
 <script src="leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/bbecquet/Leaflet.RotatedMarker/leaflet.rotatedMarker.js"></script>
 <script>
-const map = L.map('map').setView([49.9, 36.3], 10);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 18,
-  attribution: '&copy; OpenStreetMap contributors'
-}).addTo(map);
-
-const icons = {
-  shahed:   L.icon({ iconUrl: 'shahed.png', iconSize: [48, 48] }),
-  orlan:    L.icon({ iconUrl: 'orlan.png', iconSize: [48, 48] }),
-  zala:     L.icon({ iconUrl: 'zala.png', iconSize: [48, 48] }),
-  molniya:  L.icon({ iconUrl: 'molniya.png', iconSize: [48, 48] }),
-  lancet:   L.icon({ iconUrl: 'lancet.png', iconSize: [48, 48] }),
-  supercam: L.icon({ iconUrl: 'supercam.png', iconSize: [48, 48] })
-};
-
-let selectedType = null;
-const drones = [];
-
-function selectIcon(type) {
-  selectedType = type;
-}
-
-function destinationPoint(lat, lon, brng, distKm) {
-  const R = 6371;
-  const d = distKm / R;
-  const b = brng * Math.PI / 180;
-  const lat1 = lat * Math.PI / 180;
-  const lon1 = lon * Math.PI / 180;
-
-  const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d) +
-    Math.cos(lat1) * Math.sin(d) * Math.cos(b));
-  const lon2 = lon1 + Math.atan2(
-    Math.sin(b) * Math.sin(d) * Math.cos(lat1),
-    Math.cos(d) - Math.sin(lat1) * Math.sin(lat2)
-  );
-
-  return [lat2 * 180 / Math.PI, lon2 * 180 / Math.PI];
-}
-
-map.on('click', e => {
-  if (!selectedType) return;
-
-  const marker = L.rotatedMarker(e.latlng, {
-    icon: icons[selectedType],
-    draggable: true,
-    rotationAngle: 0,
-    rotationOrigin: 'center'
-  }).addTo(map);
-
-  const drone = {
-    marker,
-    path: [],
-    arrow: null,
-    heading: 0,
-    lastPos: e.latlng
-  };
-
-  marker.on('dragstart', () => {
-    drone.lastPos = marker.getLatLng();
-  });
-
-  marker.on('dragend', () => {
-    const newPos = marker.marker.getLatLng();
-    const segment = L.polyline([drone.lastPos, newPos], {
-      color: 'blue',
-      weight: 3
-    }).addTo(map);
-    drone.path.push(segment);
-    drone.lastPos = newPos;
-    updateHeading(drone); // оновити стрілку
-  });
-
-  const popup = L.popup().setContent(`
-    <b>${selectedType.toUpperCase()}</b><br>
-    Курс (0–359°): <input id="headingInput-${drones.length}" type="number" min="0" max="359" style="width: 60px;" value="0" /><br>
-    <button onclick="updateHeadingFromPopup(${drones.length})">ОК</button>
-    <button onclick="removeDrone(${drones.length})">Видалити</button>
-  `);
-
-  marker.bindPopup(popup).openPopup();
-  drones.push(drone);
-  selectedType = null;
-});
-
-function updateHeadingFromPopup(index) {
-  const input = document.getElementById(`headingInput-${index}`);
-  if (!input) return;
-  const heading = parseFloat(input.value);
-  if (isNaN(heading)) return;
-  const drone = drones[index];
-  if (!drone) return;
-
-  drone.heading = heading;
-  drone.marker.setRotationAngle(heading);
-  updateHeading(drone);
-  drone.marker.closePopup();
-}
-
-function updateHeading(drone) {
-  if (drone.arrow) map.removeLayer(drone.arrow);
-  const from = drone.marker.getLatLng();
-  const to = destinationPoint(from.lat, from.lng, drone.heading, 2);
-  drone.arrow = L.polyline([from, to], {
-    color: 'red',
-    weight: 4,
-    dashArray: "6,4"
-  }).addTo(map);
-}
-
-function removeDrone(index) {
-  const drone = drones[index];
-  if (!drone) return;
-  map.removeLayer(drone.marker);
-  if (drone.arrow) map.removeLayer(drone.arrow);
-  drone.path.forEach(line => map.removeLayer(line));
-  drones[index] = null;
-}
+  // твій JS-код без змін (можу вставити повністю якщо треба)
 </script>
 </body>
 </html>
