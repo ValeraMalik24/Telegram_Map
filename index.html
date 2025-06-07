@@ -65,8 +65,12 @@ function destinationPoint(lat, lon, brng, distKm) {
   const lat1 = lat * Math.PI / 180;
   const lon1 = lon * Math.PI / 180;
 
-  const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(b));
-  const lon2 = lon1 + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(lat1), Math.cos(d) - Math.sin(lat1) * Math.sin(lat2));
+  const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d) +
+    Math.cos(lat1) * Math.sin(d) * Math.cos(b));
+  const lon2 = lon1 + Math.atan2(
+    Math.sin(b) * Math.sin(d) * Math.cos(lat1),
+    Math.cos(d) - Math.sin(lat1) * Math.sin(lat2)
+  );
 
   return [lat2 * 180 / Math.PI, lon2 * 180 / Math.PI];
 }
@@ -74,7 +78,7 @@ function destinationPoint(lat, lon, brng, distKm) {
 map.on('click', e => {
   if (!selectedType) return;
 
-  const marker = L.marker(e.latlng, {
+  const marker = L.rotatedMarker(e.latlng, {
     icon: icons[selectedType],
     draggable: true,
     rotationAngle: 0,
@@ -94,55 +98,51 @@ map.on('click', e => {
   });
 
   marker.on('dragend', () => {
-    const newPos = marker.getLatLng();
-    const segment = L.polyline([drone.lastPos, newPos], { color: 'blue', weight: 3 }).addTo(map);
+    const newPos = marker.marker.getLatLng();
+    const segment = L.polyline([drone.lastPos, newPos], {
+      color: 'blue',
+      weight: 3
+    }).addTo(map);
     drone.path.push(segment);
     drone.lastPos = newPos;
-    updateHeading(drone);
+    updateHeading(drone); // оновити стрілку
   });
 
-  const index = drones.length;
-  marker.bindPopup(createPopupHTML(selectedType, index)).openPopup();
+  const popup = L.popup().setContent(`
+    <b>${selectedType.toUpperCase()}</b><br>
+    Курс (0–359°): <input id="headingInput-${drones.length}" type="number" min="0" max="359" style="width: 60px;" value="0" /><br>
+    <button onclick="updateHeadingFromPopup(${drones.length})">ОК</button>
+    <button onclick="removeDrone(${drones.length})">Видалити</button>
+  `);
+
+  marker.bindPopup(popup).openPopup();
   drones.push(drone);
   selectedType = null;
 });
-
-function createPopupHTML(type, index) {
-  return `
-    <b>${type.toUpperCase()}</b><br>
-    Курс (0–359°): <input id="headingInput-${index}" type="number" min="0" max="359" style="width: 60px;" value="0" /><br>
-    <button onclick="updateHeadingFromPopup(${index})">ОК</button>
-    <button onclick="removeDrone(${index})">Видалити</button>
-  `;
-}
 
 function updateHeadingFromPopup(index) {
   const input = document.getElementById(`headingInput-${index}`);
   if (!input) return;
   const heading = parseFloat(input.value);
   if (isNaN(heading)) return;
-
   const drone = drones[index];
+  if (!drone) return;
+
   drone.heading = heading;
+  drone.marker.setRotationAngle(heading);
   updateHeading(drone);
   drone.marker.closePopup();
 }
 
 function updateHeading(drone) {
   if (drone.arrow) map.removeLayer(drone.arrow);
-
   const from = drone.marker.getLatLng();
   const to = destinationPoint(from.lat, from.lng, drone.heading, 2);
-
   drone.arrow = L.polyline([from, to], {
     color: 'red',
     weight: 4,
-    dashArray: "5,5"
+    dashArray: "6,4"
   }).addTo(map);
-
-  if (typeof drone.marker.setRotationAngle === 'function') {
-    drone.marker.setRotationAngle(drone.heading);
-  }
 }
 
 function removeDrone(index) {
