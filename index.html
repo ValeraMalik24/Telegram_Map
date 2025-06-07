@@ -92,31 +92,15 @@
 
     .watermark {
       position: absolute;
-      top: 0;
-      left: 0;
-      pointer-events: none;
-      width: 100%;
-      height: 100%;
-      z-index: 1;
-      background-image: repeating-linear-gradient(
-        45deg,
-        rgba(0, 0, 0, 0.03),
-        rgba(0, 0, 0, 0.03) 40px,
-        transparent 40px,
-        transparent 80px
-      );
-    }
-
-    .watermark::before {
-      content: "t.me/Troyanda_INFO";
-      position: absolute;
       top: 50%;
       left: 50%;
-      font-size: 36px;
-      color: rgba(0, 0, 0, 0.15);
+      font-size: 48px;
+      color: rgba(0,0,0,0.05);
+      font-weight: bold;
       transform: translate(-50%, -50%) rotate(-30deg);
-      white-space: nowrap;
+      z-index: 0;
       pointer-events: none;
+      user-select: none;
     }
   </style>
 </head>
@@ -134,7 +118,7 @@
 </div>
 
 <!-- Водяний знак -->
-<div class="watermark"></div>
+<div class="watermark">t.me/Troyanda_INFO</div>
 
 <!-- Мапа -->
 <div id="map"></div>
@@ -142,7 +126,7 @@
 <!-- Меню -->
 <div class="menu" id="menu">
   <div class="menu-item" data-type="shahed">
-    <button><img src="shahed.png" style="width: 36px; height: 36px;" /></button><span>Shahed</span>
+    <button><img src="shahed.png" /></button><span>Shahed</span>
   </div>
   <div class="menu-item" data-type="orlan">
     <button><img src="orlan.png" /></button><span>Orlan</span>
@@ -159,6 +143,9 @@
   <div class="menu-item" data-type="supercam">
     <button><img src="supercam.png" /></button><span>Supercam</span>
   </div>
+  <div class="menu-item" data-type="unknown">
+    <button><img src="неизвестный.png" /></button><span>Невідомий</span>
+  </div>
 </div>
 
 <!-- JS -->
@@ -172,12 +159,13 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 }).addTo(map);
 
 const icons = {
-  shahed:   L.icon({ iconUrl: 'shahed.png', iconSize: [36, 36] }), // ЗМЕНШЕНА
+  shahed:   L.icon({ iconUrl: 'shahed.png', iconSize: [42, 42] }),
   orlan:    L.icon({ iconUrl: 'orlan.png', iconSize: [48, 48] }),
   zala:     L.icon({ iconUrl: 'zala.png', iconSize: [48, 48] }),
   molniya:  L.icon({ iconUrl: 'molniya.png', iconSize: [48, 48] }),
   lancet:   L.icon({ iconUrl: 'lancet.png', iconSize: [48, 48] }),
-  supercam: L.icon({ iconUrl: 'supercam.png', iconSize: [48, 48] })
+  supercam: L.icon({ iconUrl: 'supercam.png', iconSize: [48, 48] }),
+  unknown:  L.icon({ iconUrl: 'неизвестный.png', iconSize: [48, 48] })
 };
 
 let selectedType = null;
@@ -201,6 +189,8 @@ function destinationPoint(lat, lon, brng, distKm) {
 
 map.on('click', e => {
   if (!selectedType) return;
+
+  const index = drones.length;
   const marker = L.rotatedMarker(e.latlng, {
     icon: icons[selectedType],
     draggable: true,
@@ -208,12 +198,10 @@ map.on('click', e => {
     rotationOrigin: 'center center'
   }).addTo(map);
 
-  const index = drones.length;
   const drone = { marker, path: [], arrow: null, heading: 0, lastPos: e.latlng };
   drones.push(drone);
 
   marker.on('dragstart', () => drone.lastPos = marker.getLatLng());
-
   marker.on('dragend', () => {
     const newPos = marker.getLatLng();
     drone.path.push(L.polyline([drone.lastPos, newPos], { color: 'blue' }).addTo(map));
@@ -227,7 +215,6 @@ map.on('click', e => {
     <button onclick="updateHeadingFromPopup(${index})">OK</button>
     <button onclick="removeDrone(${index})">Видалити</button>
   `);
-
   marker.bindPopup(popup).openPopup();
 });
 
@@ -261,6 +248,7 @@ function removeDrone(index) {
   drones[index] = null;
 }
 
+// Авторизація
 function checkPassword() {
   const input = document.getElementById("authPassword").value;
   if (input === "4202") {
