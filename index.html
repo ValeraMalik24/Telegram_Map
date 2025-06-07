@@ -4,111 +4,92 @@
   <meta charset="UTF-8" />
   <title>Telegram_Map</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-  <!-- Leaflet CDN -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="leaflet.css" />
+  <link rel="stylesheet" href="style.css" />
   <style>
-    body, html { margin: 0; padding: 0; }
     #map { height: 100vh; width: 100vw; }
-    .drone-menu {
-      position: fixed;
+    .menu {
+      position: absolute;
       top: 10px;
       left: 10px;
+      z-index: 1000;
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      z-index: 999;
+      gap: 5px;
     }
-    .drone-button {
-      width: 40px;
-      height: 40px;
-      border: 2px solid #000;
-      border-radius: 8px;
-      background-color: white;
-      background-size: cover;
-      background-position: center;
+    .menu button {
+      background: white;
+      border: 1px solid gray;
+      padding: 4px;
       cursor: pointer;
     }
   </style>
 </head>
 <body>
-  <div class="drone-menu">
-    <div class="drone-button" data-type="shahed" style="background-image: url('shahed.png')"></div>
-    <div class="drone-button" data-type="orlan" style="background-image: url('orlan.png')"></div>
-    <div class="drone-button" data-type="zala" style="background-image: url('zala.png')"></div>
-    <div class="drone-button" data-type="molniya" style="background-image: url('molniya.png')"></div>
-    <div class="drone-button" data-type="lancet" style="background-image: url('lancet.png')"></div>
-    <div class="drone-button" data-type="supercam" style="background-image: url('supercam.png')"></div>
-  </div>
 
-  <div id="map"></div>
+<div id="map"></div>
 
-  <!-- Leaflet JS -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<div class="menu">
+  <button onclick="selectIcon('shahed')">Shahed</button>
+  <button onclick="selectIcon('orlan')">Orlan</button>
+  <button onclick="selectIcon('zala')">Zala</button>
+  <button onclick="selectIcon('molniya')">Molniya</button>
+  <button onclick="selectIcon('lancet')">Lancet</button>
+  <button onclick="selectIcon('supercam')">Supercam</button>
+</div>
 
-  <script>
-    const map = L.map('map').setView([49.9, 36.3], 9);
+<script src="leaflet.js"></script>
+<script src="https://rawcdn.githack.com/bbecquet/Leaflet.RotatedMarker/master/leaflet.rotatedMarker.js"></script>
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 18,
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
+<script>
+  const map = L.map('map').setView([49.9, 36.3], 10);
 
-    const icons = {
-      shahed: L.icon({ iconUrl: 'shahed.png', iconSize: [32, 32] }),
-      orlan: L.icon({ iconUrl: 'orlan.png', iconSize: [32, 32] }),
-      zala: L.icon({ iconUrl: 'zala.png', iconSize: [32, 32] }),
-      molniya: L.icon({ iconUrl: 'molniya.png', iconSize: [32, 32] }),
-      lancet: L.icon({ iconUrl: 'lancet.png', iconSize: [32, 32] }),
-      supercam: L.icon({ iconUrl: 'supercam.png', iconSize: [32, 32] })
-    };
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18,
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
 
-    let selectedType = null;
+  const icons = {
+    shahed:   L.icon({ iconUrl: 'shahed.png', iconSize: [40, 40] }),
+    orlan:    L.icon({ iconUrl: 'orlan.png', iconSize: [40, 40] }),
+    zala:     L.icon({ iconUrl: 'zala.png', iconSize: [40, 40] }),
+    molniya:  L.icon({ iconUrl: 'molniya.png', iconSize: [40, 40] }),
+    lancet:   L.icon({ iconUrl: 'lancet.png', iconSize: [40, 40] }),
+    supercam: L.icon({ iconUrl: 'supercam.png', iconSize: [40, 40] }),
+    unknown:  L.icon({ iconUrl: 'unknown.png', iconSize: [40, 40] })
+  };
 
-    document.querySelectorAll('.drone-button').forEach(btn => {
-      btn.addEventListener('click', () => {
-        selectedType = btn.dataset.type;
-      });
-    });
+  let selectedIcon = null;
 
-    function calculateArrow(lat, lon, headingDeg, distanceMeters) {
-      const R = 6371000;
-      const rad = Math.PI / 180;
-      const d = distanceMeters;
-      const brng = headingDeg * rad;
-      const lat1 = lat * rad;
-      const lon1 = lon * rad;
+  function selectIcon(name) {
+    selectedIcon = name;
+    alert(`Вибрано: ${name.toUpperCase()}. Натисни на карту, щоб поставити.`);
+  }
 
-      const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d / R) +
-        Math.cos(lat1) * Math.sin(d / R) * Math.cos(brng));
-      const lon2 = lon1 + Math.atan2(
-        Math.sin(brng) * Math.sin(d / R) * Math.cos(lat1),
-        Math.cos(d / R) - Math.sin(lat1) * Math.sin(lat2)
-      );
-
-      return [lat2 / rad, lon2 / rad];
+  map.on('click', function(e) {
+    if (!selectedIcon) {
+      alert("Оберіть тип БПЛА спочатку!");
+      return;
     }
 
-    map.on('click', function(e) {
-      if (!selectedType) return;
+    const heading = parseFloat(prompt("Введіть курс (0-359°):"));
+    if (isNaN(heading)) {
+      alert("Невірний курс.");
+      return;
+    }
 
-      const lat = e.latlng.lat;
-      const lon = e.latlng.lng;
-      const icon = icons[selectedType] || icons.shahed;
-      const marker = L.marker([lat, lon], { icon }).addTo(map);
+    L.marker(e.latlng, {
+      icon: icons[selectedIcon] || icons.unknown,
+      rotationAngle: heading - 45,
+      rotationOrigin: 'center'
+    })
+    .addTo(map)
+    .bindPopup(`<b>${selectedIcon.toUpperCase()}</b><br>Курс: ${heading}°`)
+    .openPopup();
 
-      marker.bindPopup(`<b>${selectedType.toUpperCase()}</b>`).openPopup();
+    selectedIcon = null;
+  });
+</script>
 
-      setTimeout(() => {
-        const heading = prompt("Введи курс (0-360°):", "0");
-        if (!heading) return;
-        const [lat2, lon2] = calculateArrow(lat, lon, parseFloat(heading), 3000);
-        L.polyline([[lat, lon], [lat2, lon2]], { color: 'red', weight: 2, dashArray: '4' }).addTo(map);
-        marker.setPopupContent(`<b>${selectedType.toUpperCase()}</b><br>Курс: ${heading}°`);
-      }, 100);
-
-      selectedType = null;
-    });
-  </script>
 </body>
 </html>
