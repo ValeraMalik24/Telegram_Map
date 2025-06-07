@@ -9,36 +9,6 @@
     html, body { margin: 0; padding: 0; }
     #map { height: 100vh; width: 100vw; }
 
-    .auth-modal {
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0,0,0,0.6);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      z-index: 9999;
-    }
-
-    .auth-box {
-      background: #fff;
-      padding: 20px 30px;
-      border-radius: 8px;
-      box-shadow: 0 0 10px #0004;
-      text-align: center;
-    }
-
-    .auth-box h2 { margin-bottom: 10px; }
-    .auth-box input {
-      padding: 8px 12px;
-      font-size: 16px;
-      width: 200px;
-      margin-bottom: 10px;
-    }
-    .auth-box button {
-      padding: 8px 16px;
-      font-size: 16px;
-    }
-
     .menu {
       position: absolute;
       bottom: 10px;
@@ -82,29 +52,56 @@
   </style>
 </head>
 <body>
-<div class="auth-modal" id="authModal">
-  <div class="auth-box">
-    <h2>Авторизація</h2>
-    <input type="password" id="authInput" placeholder="Введіть пароль" />
-    <br>
-    <button onclick="checkPassword()">Увійти</button>
-  </div>
-</div>
 
-<div id="map" style="display: none;"></div>
-<div class="menu" id="menu" style="display: none;">
-  <div class="menu-item" data-type="shahed"><button><img src="shahed.png" /></button><span>Shahed</span></div>
-  <div class="menu-item" data-type="orlan"><button><img src="orlan.png" /></button><span>Orlan</span></div>
-  <div class="menu-item" data-type="zala"><button><img src="zala.png" /></button><span>Zala</span></div>
-  <div class="menu-item" data-type="molniya"><button><img src="molniya.png" /></button><span>Molniya</span></div>
-  <div class="menu-item" data-type="lancet"><button><img src="lancet.png" /></button><span>Lancet</span></div>
-  <div class="menu-item" data-type="supercam"><button><img src="supercam.png" /></button><span>Supercam</span></div>
+<script>
+  function checkPassword() {
+    const pass = prompt("Введіть пароль для доступу до мапи:");
+    if (pass !== "drone123") {
+      document.body.innerHTML = "<h2 style='text-align:center; margin-top:40vh;'>⛔ Доступ заборонено</h2>";
+      throw new Error("Access denied");
+    }
+  }
+  checkPassword();
+</script>
+
+<div id="map"></div>
+<div class="menu" id="menu">
+  <div class="menu-item" data-type="shahed">
+    <button><img src="shahed.png" /></button>
+    <span>Shahed</span>
+  </div>
+  <div class="menu-item" data-type="orlan">
+    <button><img src="orlan.png" /></button>
+    <span>Orlan</span>
+  </div>
+  <div class="menu-item" data-type="zala">
+    <button><img src="zala.png" /></button>
+    <span>Zala</span>
+  </div>
+  <div class="menu-item" data-type="molniya">
+    <button><img src="molniya.png" /></button>
+    <span>Molniya</span>
+  </div>
+  <div class="menu-item" data-type="lancet">
+    <button><img src="lancet.png" /></button>
+    <span>Lancet</span>
+  </div>
+  <div class="menu-item" data-type="supercam">
+    <button><img src="supercam.png" /></button>
+    <span>Supercam</span>
+  </div>
 </div>
 
 <script src="leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/bbecquet/Leaflet.RotatedMarker/leaflet.rotatedMarker.js"></script>
+
 <script>
-let map;
+let map = L.map('map').setView([49.9, 36.3], 10);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 18,
+  attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+
 let selectedType = null;
 let drones = [];
 
@@ -117,64 +114,14 @@ const icons = {
   supercam: L.icon({ iconUrl: 'supercam.png', iconSize: [48, 48] })
 };
 
-function checkPassword() {
-  const input = document.getElementById('authInput').value;
-  if (input === "4202") {
-    document.getElementById('authModal').style.display = 'none';
-    document.getElementById('map').style.display = 'block';
-    document.getElementById('menu').style.display = 'flex';
-    initMap();
-  } else {
-    alert("Невірний пароль");
-  }
-}
-
-function initMap() {
-  map = L.map('map').setView([49.9, 36.3], 10);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 18,
-    attribution: '&copy; OpenStreetMap contributors'
-  }).addTo(map);
-
-  const menu = document.getElementById('menu');
-  menu.addEventListener('click', e => {
-    const item = e.target.closest('.menu-item');
-    if (!item) return;
-    document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('selected'));
-    item.classList.add('selected');
-    selectedType = item.dataset.type;
-  });
-
-  map.on('click', e => {
-    if (!selectedType) return;
-    const marker = L.rotatedMarker(e.latlng, {
-      icon: icons[selectedType],
-      draggable: true,
-      rotationAngle: 0,
-      rotationOrigin: 'center center'
-    }).addTo(map);
-
-    const drone = { marker, path: [], arrow: null, heading: 0, lastPos: e.latlng };
-
-    marker.on('dragstart', () => drone.lastPos = marker.getLatLng());
-    marker.on('dragend', () => {
-      const newPos = marker.getLatLng();
-      drone.path.push(L.polyline([drone.lastPos, newPos], { color: 'blue' }).addTo(map));
-      drone.lastPos = newPos;
-      updateHeading(drone);
-    });
-
-    const popup = L.popup().setContent(`
-      <b>${selectedType.toUpperCase()}</b><br>
-      Курс (0–359°): <input id="headingInput" type="number" min="0" max="359" style="width: 60px;" value="0" /><br>
-      <button onclick="updateHeadingFromPopup(${drones.length})">OK</button>
-      <button onclick="removeDrone(${drones.length})">Видалити</button>
-    `);
-
-    marker.bindPopup(popup).openPopup();
-    drones.push(drone);
-  });
-}
+const menu = document.getElementById('menu');
+menu.addEventListener('click', (e) => {
+  const item = e.target.closest('.menu-item');
+  if (!item) return;
+  document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('selected'));
+  item.classList.add('selected');
+  selectedType = item.dataset.type;
+});
 
 function destinationPoint(lat, lon, brng, distKm) {
   const R = 6371, d = distKm / R, b = brng * Math.PI / 180;
@@ -184,8 +131,41 @@ function destinationPoint(lat, lon, brng, distKm) {
   return [lat2 * 180 / Math.PI, lon2 * 180 / Math.PI];
 }
 
+map.on('click', e => {
+  if (!selectedType) return;
+
+  const marker = L.rotatedMarker(e.latlng, {
+    icon: icons[selectedType],
+    draggable: true,
+    rotationAngle: 0,
+    rotationOrigin: 'center center'
+  }).addTo(map);
+
+  const drone = { marker, path: [], arrow: null, heading: 0, lastPos: e.latlng };
+
+  marker.on('dragstart', () => drone.lastPos = marker.getLatLng());
+
+  marker.on('dragend', () => {
+    const newPos = marker.getLatLng();
+    drone.path.push(L.polyline([drone.lastPos, newPos], { color: 'blue' }).addTo(map));
+    drone.lastPos = newPos;
+    updateHeading(drone);
+  });
+
+  const popup = L.popup().setContent(`
+    <b>${selectedType.toUpperCase()}</b><br>
+    Курс (0–359°): <input id="headingInput-${drones.length}" type="number" min="0" max="359" value="0" /><br>
+    <button onclick="updateHeadingFromPopup(${drones.length})">ОК</button>
+    <button onclick="removeDrone(${drones.length})">Видалити</button>
+  `);
+
+  marker.bindPopup(popup).openPopup();
+  drones.push(drone);
+});
+
 function updateHeadingFromPopup(index) {
-  const heading = parseFloat(document.getElementById("headingInput").value);
+  const input = document.getElementById(`headingInput-${index}`);
+  const heading = parseFloat(input.value);
   if (isNaN(heading)) return;
   const drone = drones[index];
   drone.heading = heading;
