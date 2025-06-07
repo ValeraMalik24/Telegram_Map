@@ -17,7 +17,6 @@
   <div id="map"></div>
 
   <script src="leaflet.js"></script>
-  <script src="targets.js"></script>
 
   <script>
     const map = L.map('map').setView([49.9, 36.3], 8);
@@ -30,26 +29,27 @@
     const icons = {
       shahed:   L.icon({ iconUrl: 'shahed.png', iconSize: [32, 32] }),
       orlan:    L.icon({ iconUrl: 'orlan.png', iconSize: [32, 32] }),
-      unknown:  L.icon({ iconUrl: 'unknown.png', iconSize: [32, 32] }),
       zala:     L.icon({ iconUrl: 'zala.png', iconSize: [32, 32] }),
       molniya:  L.icon({ iconUrl: 'molniya.png', iconSize: [32, 32] }),
-      lancet:   L.icon({ iconUrl: 'lancet.png', iconSize: [32, 32] })
+      lancet:   L.icon({ iconUrl: 'lancet.png', iconSize: [32, 32] }),
+      supercam: L.icon({ iconUrl: 'supercam.png', iconSize: [32, 32] }),
+      unknown:  L.icon({ iconUrl: 'unknown.png', iconSize: [32, 32] })
     };
 
-    targets.forEach(obj => {
-      const marker = L.marker([obj.lat, obj.lon], {
-        icon: icons[obj.type] || L.icon({ iconUrl: 'shahed.png', iconSize: [32, 32] })
+    map.on('click', function(e) {
+      const lat = e.latlng.lat.toFixed(6);
+      const lon = e.latlng.lng.toFixed(6);
+
+      const type = prompt("Тип дрона (shahed, orlan, zala...)", "shahed");
+      if (!type) return;
+
+      const heading = prompt("Курс (0–360°)", "0");
+
+      const marker = L.marker([lat, lon], {
+        icon: icons[type] || icons.unknown
       }).addTo(map);
 
-      marker.bindPopup(`<b>${obj.type.toUpperCase()}</b><br>Курс: ${obj.heading || "?"}°`);
-
-      if (obj.radius) {
-        L.circle([obj.lat, obj.lon], {
-          radius: obj.radius,
-          color: 'red',
-          fillOpacity: 0.2
-        }).addTo(map);
-      }
+      marker.bindPopup(`<b>${type.toUpperCase()}</b><br>Курс: ${heading || "?"}°`).openPopup();
     });
   </script>
 
