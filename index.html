@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Drone Tracker Map</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <link rel="stylesheet" href="leaflet.css" />
   <style>
     html, body { margin: 0; padding: 0; }
     #map { height: 100vh; width: 100vw; }
@@ -54,16 +54,36 @@
 <body>
 <div id="map"></div>
 
+<!-- Меню вибору -->
 <div class="menu" id="menu">
-  <div class="menu-item" data-type="shahed"><button><img src="shahed.png" /></button><span>Shahed</span></div>
-  <div class="menu-item" data-type="orlan"><button><img src="orlan.png" /></button><span>Orlan</span></div>
-  <div class="menu-item" data-type="zala"><button><img src="zala.png" /></button><span>Zala</span></div>
-  <div class="menu-item" data-type="molniya"><button><img src="molniya.png" /></button><span>Molniya</span></div>
-  <div class="menu-item" data-type="lancet"><button><img src="lancet.png" /></button><span>Lancet</span></div>
-  <div class="menu-item" data-type="supercam"><button><img src="supercam.png" /></button><span>Supercam</span></div>
+  <div class="menu-item" data-type="shahed">
+    <button><img src="shahed.png" /></button>
+    <span>Shahed</span>
+  </div>
+  <div class="menu-item" data-type="orlan">
+    <button><img src="orlan.png" /></button>
+    <span>Orlan</span>
+  </div>
+  <div class="menu-item" data-type="zala">
+    <button><img src="zala.png" /></button>
+    <span>Zala</span>
+  </div>
+  <div class="menu-item" data-type="molniya">
+    <button><img src="molniya.png" /></button>
+    <span>Molniya</span>
+  </div>
+  <div class="menu-item" data-type="lancet">
+    <button><img src="lancet.png" /></button>
+    <span>Lancet</span>
+  </div>
+  <div class="menu-item" data-type="supercam">
+    <button><img src="supercam.png" /></button>
+    <span>Supercam</span>
+  </div>
 </div>
 
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<!-- Скрипти -->
+<script src="leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/bbecquet/Leaflet.RotatedMarker/leaflet.rotatedMarker.js"></script>
 <script>
 const map = L.map('map').setView([49.9, 36.3], 10);
@@ -84,7 +104,7 @@ const icons = {
 let selectedType = null;
 const drones = [];
 
-document.getElementById('menu').addEventListener('click', e => {
+document.getElementById('menu').addEventListener('click', (e) => {
   const item = e.target.closest('.menu-item');
   if (!item) return;
   document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('selected'));
@@ -103,8 +123,7 @@ function destinationPoint(lat, lon, brng, distKm) {
 map.on('click', e => {
   if (!selectedType) return;
 
-  const index = drones.length;
-  const marker = L.rotatedMarker(e.latlng, {
+  const marker = L.marker(e.latlng, {
     icon: icons[selectedType],
     draggable: true,
     rotationAngle: 0,
@@ -112,9 +131,9 @@ map.on('click', e => {
   }).addTo(map);
 
   const drone = { marker, path: [], arrow: null, heading: 0, lastPos: e.latlng };
-  drones.push(drone);
 
   marker.on('dragstart', () => drone.lastPos = marker.getLatLng());
+
   marker.on('dragend', () => {
     const newPos = marker.getLatLng();
     drone.path.push(L.polyline([drone.lastPos, newPos], { color: 'blue' }).addTo(map));
@@ -124,22 +143,21 @@ map.on('click', e => {
 
   const popup = L.popup().setContent(`
     <b>${selectedType.toUpperCase()}</b><br>
-    Курс (0–359°): <input id="headingInput_${index}" type="number" min="0" max="359" style="width: 60px;" value="0" /><br>
-    <button onclick="updateHeadingFromPopup(${index})">OK</button>
-    <button onclick="removeDrone(${index})">Видалити</button>
+    Курс (0–359°): <input id="headingInput" type="number" min="0" max="359" style="width: 60px;" value="0" /><br>
+    <button onclick="updateHeadingFromPopup(${drones.length})">OK</button>
+    <button onclick="removeDrone(${drones.length})">Видалити</button>
   `);
+
   marker.bindPopup(popup).openPopup();
+  drones.push(drone);
 });
 
 function updateHeadingFromPopup(index) {
-  const headingInput = document.getElementById(`headingInput_${index}`);
-  if (!headingInput) return;
-  const heading = parseFloat(headingInput.value);
+  const heading = parseFloat(document.getElementById("headingInput").value);
   if (isNaN(heading)) return;
-
   const drone = drones[index];
   drone.heading = heading;
-  drone.marker.setRotationAngle(heading - 45);
+  drone.marker.setRotationAngle(heading - 45); // 45° компенсуємо базовий кут
   updateHeading(drone);
   drone.marker.closePopup();
 }
