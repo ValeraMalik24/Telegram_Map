@@ -170,7 +170,7 @@ function destinationPoint(lat, lon, brng, distKm) {
 map.on('click', e => {
   if (!selectedType) return;
 
-  const marker = L.rotatedMarker(e.latlng, {
+  const marker = L.marker(e.latlng, {
     icon: icons[selectedType],
     draggable: true,
     rotationAngle: 0,
@@ -230,6 +230,7 @@ function removeDrone(index) {
   drones[index] = null;
 }
 
+// Авторизація
 function checkPassword() {
   const input = document.getElementById("authPassword").value;
   if (input === "4202") {
