@@ -4,21 +4,29 @@
   <meta charset="UTF-8" />
   <title>Telegram_Map</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
   <link rel="stylesheet" href="leaflet.css" />
   <style>
-    html, body { margin: 0; padding: 0; }
-    #map { height: 100vh; width: 100vw; }
+    html, body {
+      margin: 0;
+      padding: 0;
+    }
+
+    #map {
+      height: 100vh;
+      width: 100vw;
+    }
+
     .menu {
       position: absolute;
       top: 10px;
       left: 10px;
-      background: rgba(255, 255, 255, 0.9);
+      background: rgba(255, 255, 255, 0.85);
       padding: 6px;
       border-radius: 6px;
       box-shadow: 0 0 4px #0003;
       z-index: 1000;
     }
+
     .menu button {
       background: none;
       border: none;
@@ -26,9 +34,10 @@
       padding: 0;
       cursor: pointer;
     }
+
     .menu img {
-      width: 40px;
-      height: 40px;
+      width: 46px;
+      height: 46px;
       border: 1px solid #ccc;
       border-radius: 4px;
     }
@@ -38,116 +47,111 @@
 
 <div id="map"></div>
 <div class="menu">
-  <button onclick="selectIcon('shahed')"><img src="shahed.png" /></button>
-  <button onclick="selectIcon('orlan')"><img src="orlan.png" /></button>
-  <button onclick="selectIcon('zala')"><img src="zala.png" /></button>
-  <button onclick="selectIcon('molniya')"><img src="molniya.png" /></button>
-  <button onclick="selectIcon('lancet')"><img src="lancet.png" /></button>
-  <button onclick="selectIcon('supercam')"><img src="supercam.png" /></button>
+  <button onclick="selectIcon('shahed')"><img src="shahed.png" alt="Shahed" title="Shahed" /></button>
+  <button onclick="selectIcon('orlan')"><img src="orlan.png" alt="Orlan" title="Orlan" /></button>
+  <button onclick="selectIcon('zala')"><img src="zala.png" alt="Zala" title="Zala" /></button>
+  <button onclick="selectIcon('molniya')"><img src="molniya.png" alt="Molniya" title="Molniya" /></button>
+  <button onclick="selectIcon('lancet')"><img src="lancet.png" alt="Lancet" title="Lancet" /></button>
+  <button onclick="selectIcon('supercam')"><img src="supercam.png" alt="Supercam" title="Supercam" /></button>
 </div>
 
 <script src="leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/bbecquet/Leaflet.RotatedMarker/leaflet.rotatedMarker.js"></script>
 <script>
-  const map = L.map('map').setView([49.9, 36.3], 10);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 18,
-    attribution: '&copy; OpenStreetMap contributors'
+const map = L.map('map').setView([49.9, 36.3], 10);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 18,
+  attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+
+const icons = {
+  shahed:   L.icon({ iconUrl: 'shahed.png', iconSize: [46, 46] }),
+  orlan:    L.icon({ iconUrl: 'orlan.png', iconSize: [46, 46] }),
+  zala:     L.icon({ iconUrl: 'zala.png', iconSize: [46, 46] }),
+  molniya:  L.icon({ iconUrl: 'molniya.png', iconSize: [46, 46] }),
+  lancet:   L.icon({ iconUrl: 'lancet.png', iconSize: [46, 46] }),
+  supercam: L.icon({ iconUrl: 'supercam.png', iconSize: [46, 46] }),
+  unknown:  L.icon({ iconUrl: 'unknown.png', iconSize: [46, 46] })
+};
+
+let selectedIcon = null;
+let drones = [];
+
+function selectIcon(name) {
+  selectedIcon = name;
+}
+
+function drawArrow(latlng, heading, length = 3000) {
+  const angle = (heading - 90) * Math.PI / 180;
+  const dx = length * Math.cos(angle);
+  const dy = length * Math.sin(angle);
+
+  const destination = L.latLng(
+    latlng.lat + (dy / 111320),
+    latlng.lng + (dx / (40075000 * Math.cos(latlng.lat * Math.PI / 180) / 360))
+  );
+
+  return L.polyline([latlng, destination], {
+    color: 'red',
+    weight: 4,
+    dashArray: '5, 5',
+    opacity: 0.9
   }).addTo(map);
+}
 
-  const icons = {
-    shahed:   L.icon({ iconUrl: 'shahed.png', iconSize: [46, 46] }),
-    orlan:    L.icon({ iconUrl: 'orlan.png', iconSize: [46, 46] }),
-    zala:     L.icon({ iconUrl: 'zala.png', iconSize: [46, 46] }),
-    molniya:  L.icon({ iconUrl: 'molniya.png', iconSize: [46, 46] }),
-    lancet:   L.icon({ iconUrl: 'lancet.png', iconSize: [46, 46] }),
-    supercam: L.icon({ iconUrl: 'supercam.png', iconSize: [46, 46] }),
-    unknown:  L.icon({ iconUrl: 'unknown.png', iconSize: [46, 46] })
-  };
+map.on('click', function(e) {
+  if (!selectedIcon) return;
 
-  let selectedIcon = null;
-  const bplaMarkers = [];
+  const headingInput = document.createElement("input");
+  headingInput.type = "number";
+  headingInput.placeholder = "Курс (0–359°)";
 
-  function selectIcon(name) {
-    selectedIcon = name;
-  }
+  const confirm = document.createElement("button");
+  confirm.textContent = "OK";
 
-  map.on('click', function (e) {
-    if (!selectedIcon) return;
+  const container = L.DomUtil.create('div');
+  container.innerHTML = `<strong>${selectedIcon.toUpperCase()}</strong><br />`;
+  container.appendChild(headingInput);
+  container.appendChild(confirm);
 
-    const latlng = e.latlng;
-    const marker = L.marker(latlng, {
-      icon: icons[selectedIcon] || icons.unknown,
-      draggable: true,
-      rotationAngle: 0,
-      rotationOrigin: 'center'
-    }).addTo(map);
+  const popup = L.popup()
+    .setLatLng(e.latlng)
+    .setContent(container)
+    .openOn(map);
 
-    const bplaData = { marker, arrow: null, heading: null };
-    bplaMarkers.push(bplaData);
-
-    const popupContent = document.createElement('div');
-    popupContent.innerHTML = `
-      <strong>${selectedIcon.toUpperCase()}</strong><br>
-      Курс (0–359°): <input type="number" id="headingInput" min="0" max="359" style="width: 60px" /><br>
-      <button onclick="updateHeading(${bplaMarkers.length - 1})">ОК</button>
-      <button onclick="removeBPLA(${bplaMarkers.length - 1})">Видалити</button>
-    `;
-
-    marker.bindPopup(popupContent).openPopup();
-
-    marker.on('dragend', () => {
-      if (bplaData.arrow) map.removeLayer(bplaData.arrow);
-      if (bplaData.heading !== null) {
-        drawArrow(marker.getLatLng(), bplaData.heading, bplaData);
-      }
-    });
-
-    selectedIcon = null;
-  });
-
-  function updateHeading(index) {
-    const data = bplaMarkers[index];
-    const headingInput = document.getElementById('headingInput');
+  confirm.onclick = () => {
     const heading = parseFloat(headingInput.value);
     if (isNaN(heading)) return;
 
-    const marker = data.marker;
-    marker.setRotationAngle(heading - 45);
-    data.heading = heading;
+    map.closePopup();
 
-    if (data.arrow) map.removeLayer(data.arrow);
-    drawArrow(marker.getLatLng(), heading, data);
-
-    marker.closePopup();
-  }
-
-  function removeBPLA(index) {
-    const data = bplaMarkers[index];
-    map.removeLayer(data.marker);
-    if (data.arrow) map.removeLayer(data.arrow);
-    bplaMarkers[index] = null;
-  }
-
-  function drawArrow(latlng, heading, data) {
-    const distance = 0.015; // км
-    const rad = heading * Math.PI / 180;
-    const destLat = latlng.lat + distance * Math.cos(rad);
-    const destLng = latlng.lng + distance * Math.sin(rad);
-
-    const arrowHead = L.polyline([
-      latlng,
-      [destLat, destLng]
-    ], {
-      color: 'red',
-      weight: 4,
-      opacity: 0.8,
-      dashArray: '5,2'
+    const marker = L.marker(e.latlng, {
+      icon: icons[selectedIcon] || icons.unknown,
+      rotationAngle: heading - 45,
+      rotationOrigin: 'center'
     }).addTo(map);
+    marker.dragging?.enable();
 
-    data.arrow = arrowHead;
-  }
+    let previousPosition = e.latlng;
+    let courseArrow = drawArrow(e.latlng, heading);
+    const pathLine = L.polyline([], { color: 'blue', weight: 3 }).addTo(map);
+
+    marker.bindPopup(container);
+    marker.on('drag', function(event) {
+      const newLatLng = event.target.getLatLng();
+      const newLine = [previousPosition, newLatLng];
+      pathLine.addLatLng(newLatLng);
+      previousPosition = newLatLng;
+
+      courseArrow.remove();
+      courseArrow = drawArrow(newLatLng, heading);
+    });
+
+    drones.push({ marker, courseArrow, pathLine });
+    selectedIcon = null;
+  };
+});
 </script>
-
 </body>
 </html>
