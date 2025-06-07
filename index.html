@@ -53,6 +53,8 @@
 </head>
 <body>
 <div id="map"></div>
+
+<!-- Меню вибору -->
 <div class="menu" id="menu">
   <div class="menu-item" data-type="shahed">
     <button><img src="shahed.png" /></button>
@@ -80,6 +82,7 @@
   </div>
 </div>
 
+<!-- Скрипти -->
 <script src="leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/bbecquet/Leaflet.RotatedMarker/leaflet.rotatedMarker.js"></script>
 <script>
@@ -101,9 +104,7 @@ const icons = {
 let selectedType = null;
 const drones = [];
 
-// вибір іконки
-const menu = document.getElementById('menu');
-menu.addEventListener('click', (e) => {
+document.getElementById('menu').addEventListener('click', (e) => {
   const item = e.target.closest('.menu-item');
   if (!item) return;
   document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('selected'));
@@ -122,7 +123,7 @@ function destinationPoint(lat, lon, brng, distKm) {
 map.on('click', e => {
   if (!selectedType) return;
 
-  const marker = L.rotatedMarker(e.latlng, {
+  const marker = L.marker(e.latlng, {
     icon: icons[selectedType],
     draggable: true,
     rotationAngle: 0,
@@ -156,7 +157,7 @@ function updateHeadingFromPopup(index) {
   if (isNaN(heading)) return;
   const drone = drones[index];
   drone.heading = heading;
-  drone.marker.setRotationAngle(heading - 45);
+  drone.marker.setRotationAngle(heading - 45); // 45° компенсуємо базовий кут
   updateHeading(drone);
   drone.marker.closePopup();
 }
