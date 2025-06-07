@@ -79,32 +79,67 @@
   };
 
   let selectedIcon = null;
+  let pendingMarker = null;
 
   function selectIcon(name) {
     selectedIcon = name;
-    alert(`Вибрано тип: ${name.toUpperCase()}. Тепер натисни по мапі.`);
+    alert(`Вибрано тип: ${name.toUpperCase()}. Тепер клацни на мапі.`);
   }
 
- map.on('click', function(e) {
-  if (!selectedIcon) {
-    alert("Спочатку обери тип БПЛА.");
-    return;
+  map.on('click', function(e) {
+    if (!selectedIcon) {
+      alert("Спочатку обери тип БПЛА.");
+      return;
+    }
+
+    const marker = L.marker(e.latlng, {
+      icon: icons[selectedIcon] || icons.unknown,
+      rotationAngle: 0,
+      rotationOrigin: 'center'
+    }).addTo(map);
+
+    pendingMarker = marker;
+
+    const popupText = `<b>${selectedIcon.toUpperCase()}</b><br>Вкажи курс:` +
+      `<br><input id="headingInput" type="number" min="0" max="359" placeholder="Курс (0-359)" style="width: 80px;" />` +
+      `<br><button onclick="setHeading()">ОК</button>`;
+
+    marker.bindPopup(popupText).openPopup();
+  });
+
+  function setHeading() {
+    const input = document.getElementById("headingInput");
+    const heading = parseFloat(input.value);
+    if (isNaN(heading)) return alert("Некоректне значення курсу.");
+
+    const rotation = heading - 45;
+    pendingMarker.setRotationAngle(rotation);
+
+    const latlng = pendingMarker.getLatLng();
+    const length = 500; // довжина лінії у метрах
+
+    const endPoint = computeDestinationPoint(latlng.lat, latlng.lng, heading, length);
+    L.polyline([latlng, endPoint], {color: 'red', weight: 2}).addTo(map);
+
+    pendingMarker.closePopup();
+    pendingMarker = null;
+    selectedIcon = null;
   }
 
-  const heading = parseFloat(prompt("Введіть курс (0–359°):", "0"));
-  const rotation = !isNaN(heading) ? heading - 45 : 0;
+  function computeDestinationPoint(lat, lon, bearing, distance) {
+    const R = 6371e3; // радіус Землі
+    const φ1 = lat * Math.PI / 180;
+    const λ1 = lon * Math.PI / 180;
+    const θ = bearing * Math.PI / 180;
+    const δ = distance / R;
 
-  const marker = L.marker(e.latlng, {
-    icon: icons[selectedIcon] || icons.unknown,
-    rotationAngle: rotation,
-    rotationOrigin: 'center'
-  }).addTo(map);
+    const φ2 = Math.asin(Math.sin(φ1) * Math.cos(δ) +
+                         Math.cos(φ1) * Math.sin(δ) * Math.cos(θ));
+    const λ2 = λ1 + Math.atan2(Math.sin(θ) * Math.sin(δ) * Math.cos(φ1),
+                               Math.cos(δ) - Math.sin(φ1) * Math.sin(φ2));
 
-  const popupText = `<b>${selectedIcon.toUpperCase()}</b><br>Курс: ${!isNaN(heading) ? heading : "?"}°`;
-  marker.bindPopup(popupText).openPopup();
-
-  selectedIcon = null;
-});
+    return L.latLng(φ2 * 180 / Math.PI, λ2 * 180 / Math.PI);
+  }
 </script>
 
 </body>
