@@ -38,7 +38,7 @@
 
     targets.forEach(obj => {
       const marker = L.marker([obj.lat, obj.lon], {
-        icon: icons[obj.type] || icons.unknown
+        icon: icons[obj.type] || L.icon({ iconUrl: 'shahed.png', iconSize: [32, 32] })
       }).addTo(map);
 
       marker.bindPopup(`<b>${obj.type.toUpperCase()}</b><br>Курс: ${obj.heading || "?"}°`);
