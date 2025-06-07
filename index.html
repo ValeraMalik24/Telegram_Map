@@ -69,17 +69,16 @@
   }).addTo(map);
 
   const icons = {
-    shahed:   L.icon({ iconUrl: 'shahed.png', iconSize: [40, 40] }),
-    orlan:    L.icon({ iconUrl: 'orlan.png', iconSize: [40, 40] }),
-    zala:     L.icon({ iconUrl: 'zala.png', iconSize: [40, 40] }),
-    molniya:  L.icon({ iconUrl: 'molniya.png', iconSize: [40, 40] }),
-    lancet:   L.icon({ iconUrl: 'lancet.png', iconSize: [40, 40] }),
-    supercam: L.icon({ iconUrl: 'supercam.png', iconSize: [40, 40] }),
-    unknown:  L.icon({ iconUrl: 'unknown.png', iconSize: [40, 40] })
+    shahed:   L.icon({ iconUrl: 'shahed.png', iconSize: [40, 40], iconAnchor: [20, 20] }),
+    orlan:    L.icon({ iconUrl: 'orlan.png', iconSize: [40, 40], iconAnchor: [20, 20] }),
+    zala:     L.icon({ iconUrl: 'zala.png', iconSize: [40, 40], iconAnchor: [20, 20] }),
+    molniya:  L.icon({ iconUrl: 'molniya.png', iconSize: [40, 40], iconAnchor: [20, 20] }),
+    lancet:   L.icon({ iconUrl: 'lancet.png', iconSize: [40, 40], iconAnchor: [20, 20] }),
+    supercam: L.icon({ iconUrl: 'supercam.png', iconSize: [40, 40], iconAnchor: [20, 20] }),
+    unknown:  L.icon({ iconUrl: 'unknown.png', iconSize: [40, 40], iconAnchor: [20, 20] })
   };
 
   let selectedIcon = null;
-  let pendingMarker = null;
 
   function selectIcon(name) {
     selectedIcon = name;
@@ -98,36 +97,25 @@
       rotationOrigin: 'center'
     }).addTo(map);
 
-    pendingMarker = marker;
+    const heading = prompt("Введіть курс (0–359°):", "0");
+    const angle = parseFloat(heading);
 
-    const popupText = `<b>${selectedIcon.toUpperCase()}</b><br>Вкажи курс:` +
-      `<br><input id="headingInput" type="number" min="0" max="359" placeholder="Курс (0-359)" style="width: 80px;" />` +
-      `<br><button onclick="setHeading()">ОК</button>`;
+    if (!isNaN(angle)) {
+      marker.setRotationAngle(angle - 45);
 
-    marker.bindPopup(popupText).openPopup();
+      const endPoint = computeDestinationPoint(e.latlng.lat, e.latlng.lng, angle, 1000);
+      L.polyline([e.latlng, endPoint], {color: 'red', weight: 2}).addTo(map);
+
+      marker.bindPopup(`<b>${selectedIcon.toUpperCase()}</b><br>Курс: ${angle}°`).openPopup();
+    } else {
+      marker.bindPopup(`<b>${selectedIcon.toUpperCase()}</b><br>Курс: ?`).openPopup();
+    }
+
+    selectedIcon = null;
   });
 
-  function setHeading() {
-    const input = document.getElementById("headingInput");
-    const heading = parseFloat(input.value);
-    if (isNaN(heading)) return alert("Некоректне значення курсу.");
-
-    const rotation = heading - 45;
-    pendingMarker.setRotationAngle(rotation);
-
-    const latlng = pendingMarker.getLatLng();
-    const length = 500; // довжина лінії у метрах
-
-    const endPoint = computeDestinationPoint(latlng.lat, latlng.lng, heading, length);
-    L.polyline([latlng, endPoint], {color: 'red', weight: 2}).addTo(map);
-
-    pendingMarker.closePopup();
-    pendingMarker = null;
-    selectedIcon = null;
-  }
-
   function computeDestinationPoint(lat, lon, bearing, distance) {
-    const R = 6371e3; // радіус Землі
+    const R = 6371e3;
     const φ1 = lat * Math.PI / 180;
     const λ1 = lon * Math.PI / 180;
     const θ = bearing * Math.PI / 180;
