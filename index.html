@@ -46,8 +46,8 @@
     }
 
     .menu-item img {
-      width: 32px;
-      height: 32px;
+      width: 36px;
+      height: 36px;
       border-radius: 4px;
     }
 
@@ -93,7 +93,6 @@
 </head>
 <body>
 
-<!-- Авторизація -->
 <div id="authModal" class="auth-modal">
   <div class="auth-content">
     <img src="logo.png" alt="Logo" class="auth-logo" />
@@ -104,10 +103,8 @@
   </div>
 </div>
 
-<!-- Мапа -->
 <div id="map"></div>
 
-<!-- Меню -->
 <div class="menu" id="menu">
   <div class="menu-item" data-type="shahed">
     <button><img src="shahed.png" /></button><span>Shahed</span>
@@ -127,12 +124,11 @@
   <div class="menu-item" data-type="supercam">
     <button><img src="supercam.png" /></button><span>Supercam</span>
   </div>
-  <div class="menu-item" data-type="unknown">
+  <div class="menu-item" data-type="невідомий">
     <button><img src="невідомий.png" /></button><span>Невідомий</span>
   </div>
 </div>
 
-<!-- JS -->
 <script src="leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/bbecquet/Leaflet.RotatedMarker/leaflet.rotatedMarker.js"></script>
 <script>
@@ -143,13 +139,13 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 }).addTo(map);
 
 const icons = {
-  shahed:   L.icon({ iconUrl: 'shahed.png', iconSize: [36, 36] }),
+  shahed:   L.icon({ iconUrl: 'shahed.png', iconSize: [36, 36], iconAnchor: [18, 30] }),
   orlan:    L.icon({ iconUrl: 'orlan.png', iconSize: [36, 36] }),
   zala:     L.icon({ iconUrl: 'zala.png', iconSize: [36, 36] }),
   molniya:  L.icon({ iconUrl: 'molniya.png', iconSize: [36, 36] }),
   lancet:   L.icon({ iconUrl: 'lancet.png', iconSize: [36, 36] }),
   supercam: L.icon({ iconUrl: 'supercam.png', iconSize: [36, 36] }),
-  unknown:  L.icon({ iconUrl: 'невідомий.png', iconSize: [36, 36] })
+  'невідомий': L.icon({ iconUrl: 'невідомий.png', iconSize: [36, 36] })
 };
 
 let selectedType = null;
@@ -174,18 +170,15 @@ function destinationPoint(lat, lon, brng, distKm) {
 map.on('click', e => {
   if (!selectedType) return;
 
-  const index = drones.length;
-  const icon = icons[selectedType];
-  const rotationOffset = selectedType === 'unknown' ? 0 : -45;
-
   const marker = L.rotatedMarker(e.latlng, {
-    icon: icon,
+    icon: icons[selectedType],
     draggable: true,
     rotationAngle: 0,
-    rotationOrigin: 'center center'
+    rotationOrigin: selectedType === 'shahed' ? 'bottom center' : 'center center'
   }).addTo(map);
 
-  const drone = { marker, path: [], arrow: null, heading: 0, lastPos: e.latlng, type: selectedType, rotationOffset: rotationOffset };
+  const index = drones.length;
+  const drone = { marker, path: [], arrow: null, heading: 0, lastPos: e.latlng };
   drones.push(drone);
 
   marker.on('dragstart', () => drone.lastPos = marker.getLatLng());
@@ -212,7 +205,7 @@ function updateHeadingFromPopup(index) {
   if (isNaN(heading)) return;
   const drone = drones[index];
   drone.heading = heading;
-  drone.marker.setRotationAngle(heading + drone.rotationOffset);
+  drone.marker.setRotationAngle(heading - (drone.marker.options.icon.options.iconUrl.includes('shahed') ? 45 : 0));
   updateHeading(drone);
   drone.marker.closePopup();
 }
@@ -237,7 +230,6 @@ function removeDrone(index) {
   drones[index] = null;
 }
 
-// Авторизація
 function checkPassword() {
   const input = document.getElementById("authPassword").value;
   if (input === "4202") {
