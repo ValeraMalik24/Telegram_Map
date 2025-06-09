@@ -46,8 +46,8 @@
     }
 
     .menu-item img {
-      width: 36px;
-      height: 36px;
+      width: 32px;
+      height: 32px;
       border-radius: 4px;
     }
 
@@ -89,6 +89,19 @@
       border-radius: 4px;
       cursor: pointer;
     }
+
+    .watermark {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotate(-30deg);
+      font-size: 32px;
+      color: rgba(0, 0, 0, 0.1);
+      z-index: 1;
+      pointer-events: none;
+      user-select: none;
+      white-space: nowrap;
+    }
   </style>
 </head>
 <body>
@@ -103,6 +116,7 @@
 </div>
 
 <div id="map"></div>
+<div class="watermark">t.me/Troyanda_INFO</div>
 
 <div class="menu" id="menu">
   <div class="menu-item" data-type="shahed">
@@ -123,7 +137,7 @@
   <div class="menu-item" data-type="supercam">
     <button><img src="supercam.png" /></button><span>Supercam</span>
   </div>
-  <div class="menu-item" data-type="nevdomyi">
+  <div class="menu-item" data-type="nevdomiy">
     <button><img src="невідомий.png" /></button><span>Невідомий</span>
   </div>
 </div>
@@ -138,13 +152,13 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 }).addTo(map);
 
 const icons = {
-  shahed:   L.icon({ iconUrl: 'shahed.png', iconSize: [36, 36] }),
-  orlan:    L.icon({ iconUrl: 'orlan.png', iconSize: [36, 36] }),
-  zala:     L.icon({ iconUrl: 'zala.png', iconSize: [36, 36] }),
-  molniya:  L.icon({ iconUrl: 'molniya.png', iconSize: [36, 36] }),
-  lancet:   L.icon({ iconUrl: 'lancet.png', iconSize: [36, 36] }),
-  supercam: L.icon({ iconUrl: 'supercam.png', iconSize: [36, 36] }),
-  nevdomyi: L.icon({ iconUrl: 'невідомий.png', iconSize: [36, 36] })
+  shahed:   L.icon({ iconUrl: 'shahed.png', iconSize: [32, 32] }),
+  orlan:    L.icon({ iconUrl: 'orlan.png', iconSize: [32, 32] }),
+  zala:     L.icon({ iconUrl: 'zala.png', iconSize: [32, 32] }),
+  molniya:  L.icon({ iconUrl: 'molniya.png', iconSize: [32, 32] }),
+  lancet:   L.icon({ iconUrl: 'lancet.png', iconSize: [32, 32] }),
+  supercam: L.icon({ iconUrl: 'supercam.png', iconSize: [32, 32] }),
+  nevdomiy: L.icon({ iconUrl: 'невідомий.png', iconSize: [32, 32] })
 };
 
 let selectedType = null;
@@ -167,12 +181,13 @@ function destinationPoint(lat, lon, brng, distKm) {
 }
 
 map.on('click', e => {
-  if (!selectedType) return;
+  if (!selectedType || !icons[selectedType]) return;
 
+  const icon = icons[selectedType];
   const marker = L.rotatedMarker(e.latlng, {
-    icon: icons[selectedType],
+    icon: icon,
     draggable: true,
-    rotationAngle: selectedType === 'nevdomyi' ? 0 : -45,
+    rotationAngle: 0,
     rotationOrigin: 'center center'
   }).addTo(map);
 
@@ -190,7 +205,7 @@ map.on('click', e => {
 
   const popup = L.popup().setContent(`
     <b>${selectedType.toUpperCase()}</b><br>
-    Курс (0–359°): <input id="headingInput" type="number" min="0" max="359" style="width: 60px;" value="0" /><br>
+    Курс (0–359°): <input id="headingInput${index}" type="number" min="0" max="359" style="width: 60px;" value="0" /><br>
     <button onclick="updateHeadingFromPopup(${index})">OK</button>
     <button onclick="removeDrone(${index})">Видалити</button>
   `);
@@ -199,11 +214,12 @@ map.on('click', e => {
 });
 
 function updateHeadingFromPopup(index) {
-  const heading = parseFloat(document.getElementById("headingInput").value);
+  const input = document.getElementById("headingInput" + index);
+  const heading = parseFloat(input.value);
   if (isNaN(heading)) return;
   const drone = drones[index];
   drone.heading = heading;
-  const correction = drone.marker.options.icon.options.iconUrl.includes("невідомий") ? 0 : -45;
+  const correction = drone.marker.options.icon.options.iconUrl.includes('невідомий') ? 0 : -45;
   drone.marker.setRotationAngle(heading + correction);
   updateHeading(drone);
   drone.marker.closePopup();
