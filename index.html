@@ -142,13 +142,13 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 }).addTo(map);
 
 const icons = {
-  shahed:   L.icon({ iconUrl: 'shahed.png', iconSize: [32, 32] }),
-  orlan:    L.icon({ iconUrl: 'orlan.png', iconSize: [36, 36] }),
-  zala:     L.icon({ iconUrl: 'zala.png', iconSize: [36, 36] }),
-  molniya:  L.icon({ iconUrl: 'molniya.png', iconSize: [36, 36] }),
-  lancet:   L.icon({ iconUrl: 'lancet.png', iconSize: [36, 36] }),
-  supercam: L.icon({ iconUrl: 'supercam.png', iconSize: [36, 36] }),
-  "невідомий": L.icon({ iconUrl: 'невідомий.png', iconSize: [36, 36] })
+  shahed:   L.icon({ iconUrl: 'shahed.png', iconSize: [30, 30], iconAnchor: [15, 15] }),
+  orlan:    L.icon({ iconUrl: 'orlan.png', iconSize: [36, 36], iconAnchor: [18, 18] }),
+  zala:     L.icon({ iconUrl: 'zala.png', iconSize: [36, 36], iconAnchor: [18, 18] }),
+  molniya:  L.icon({ iconUrl: 'molniya.png', iconSize: [36, 36], iconAnchor: [18, 18] }),
+  lancet:   L.icon({ iconUrl: 'lancet.png', iconSize: [36, 36], iconAnchor: [18, 18] }),
+  supercam: L.icon({ iconUrl: 'supercam.png', iconSize: [36, 36], iconAnchor: [18, 18] }),
+  "невідомий": L.icon({ iconUrl: 'невідомий.png', iconSize: [36, 36], iconAnchor: [18, 18] })
 };
 
 let selectedType = null;
@@ -166,16 +166,13 @@ function destinationPoint(lat, lon, brng, distKm) {
   const R = 6371, d = distKm / R, b = brng * Math.PI / 180;
   const lat1 = lat * Math.PI / 180, lon1 = lon * Math.PI / 180;
   const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(b));
-  const lon2 = lon1 + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(lat1),
-                                 Math.cos(d) - Math.sin(lat1) * Math.sin(lat2));
+  const lon2 = lon1 + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(lat1), Math.cos(d) - Math.sin(lat1) * Math.sin(lat2));
   return [lat2 * 180 / Math.PI, lon2 * 180 / Math.PI];
 }
 
 map.on('click', e => {
   if (!selectedType) return;
-
-  const icon = icons[selectedType];
-  const index = drones.length;
+  const icon = icons[selectedType] || icons["невідомий"];
   const center = e.latlng;
 
   let marker;
@@ -190,46 +187,41 @@ map.on('click', e => {
     }).addTo(map);
   }
 
+  const index = drones.length;
   const drone = { marker, path: [], arrow: null, heading: 0, lastPos: center };
   drones.push(drone);
 
   marker.on('dragstart', () => drone.lastPos = marker.getLatLng());
-
   marker.on('dragend', () => {
     const newPos = marker.getLatLng();
     drone.path.push(L.polyline([drone.lastPos, newPos], { color: 'blue' }).addTo(map));
     drone.lastPos = newPos;
-    updateHeading(drone);
+    updateHeading(drone, selectedType);
   });
 
   const popup = L.popup().setContent(`
     <b>${selectedType.toUpperCase()}</b><br>
     Курс (0–359°): <input id="headingInput" type="number" min="0" max="359" style="width: 60px;" value="0" /><br>
-    <button onclick="updateHeadingFromPopup(${index})">OK</button>
+    <button onclick="updateHeadingFromPopup(${index}, '${selectedType}')">OK</button>
     <button onclick="removeDrone(${index})">Видалити</button>
   `);
 
   marker.bindPopup(popup).openPopup();
 });
 
-function updateHeadingFromPopup(index) {
+function updateHeadingFromPopup(index, type) {
   const heading = parseFloat(document.getElementById("headingInput").value);
   if (isNaN(heading)) return;
   const drone = drones[index];
   drone.heading = heading;
-
-  const type = selectedType || 'невідомий';
-  const rotationOffset = (type === "shahed") ? -45 : (type === "невідомий") ? 0 : -45;
-
   if (drone.marker.setRotationAngle) {
-    drone.marker.setRotationAngle(heading + rotationOffset);
+    drone.marker.setRotationAngle(type === "невідомий" ? heading : heading - 45);
   }
-
-  updateHeading(drone);
+  updateHeading(drone, type);
   drone.marker.closePopup();
 }
 
-function updateHeading(drone) {
+function updateHeading(drone, type) {
   if (drone.arrow) map.removeLayer(drone.arrow);
   const from = drone.marker.getLatLng();
   const to = destinationPoint(from.lat, from.lng, drone.heading, 2);
@@ -249,7 +241,6 @@ function removeDrone(index) {
   drones[index] = null;
 }
 
-// Авторизація
 function checkPassword() {
   const input = document.getElementById("authPassword").value;
   if (input === "4202") {
