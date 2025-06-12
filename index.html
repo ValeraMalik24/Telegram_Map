@@ -41,14 +41,13 @@ const SMALL_ARROW=8;          // розмір «бігаючих» стріло�
 const REPEAT='10%';           // крок між стрілками
 /******************************************************************/
 
-const hasRotate=typeof L.rotatedMarker==='function';
 let map=null;const drones=[];
+const hasRotate=typeof L.rotatedMarker==='function';
 
 function makeIcon(name,size){return L.icon({iconUrl:`${name}.png`,iconSize:[size,size],iconAnchor:[size/2,size/2]});}
 function bearing(a,b){const φ1=a.lat*Math.PI/180,φ2=b.lat*Math.PI/180,Δλ=(b.lng-a.lng)*Math.PI/180;const y=Math.sin(Δλ)*Math.cos(φ2);const x=Math.cos(φ1)*Math.sin(φ2)-Math.sin(φ1)*Math.cos(φ2)*Math.cos(Δλ);return(Math.atan2(y,x)*180/Math.PI+360)%360;}
 
-/* Popup helpers */
-window.setHeading=(idx,val)=>{const v=+val;if(isNaN(v))return;const dr=drones[idx];if(!dr)return;if(dr.marker.setRotationAngle)dr.marker.setRotationAngle(v-(dr.rotOffset||0));dr.marker.closePopup();};
+/* Popup helper                         */
 window.removeDrone=idx=>{const dr=drones[idx];if(!dr)return;cancelAnimationFrame(dr._raf);cancelAnimationFrame(dr._arrowRAF);[dr.marker,dr.shadow,dr.line,dr.decor].forEach(l=>l && map.removeLayer(l));drones[idx]=null;};
 
 /***********************  INIT  ***********************************/
@@ -57,48 +56,60 @@ window.addEventListener('DOMContentLoaded',()=>{
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© OpenStreetMap'}).addTo(map);
 
   /* меню */
-  const icons={};const menu=document.getElementById('menu');let selected=null;
+  const icons={};const menu=document.getElementById('menu');let selectedType=null;let activeIdx=null; // активний дрон для прокладання курсу
   TYPES.forEach(([n,s])=>{icons[n]=makeIcon(n,s);const el=document.createElement('div');el.className='menu-item';el.dataset.type=n;el.innerHTML=`<button><img src="${n}.png"></button><span>${n}</span>`;menu.appendChild(el);});
-  menu.addEventListener('click',e=>{const it=e.target.closest('.menu-item');if(!it)return;menu.querySelectorAll('.menu-item').forEach(x=>x.classList.remove('selected'));it.classList.add('selected');selected=it.dataset.type;});
+  menu.addEventListener('click',e=>{const it=e.target.closest('.menu-item');if(!it)return;menu.querySelectorAll('.menu-item').forEach(x=>x.classList.remove('selected'));it.classList.add('selected');selectedType=it.dataset.type;activeIdx=null;});
   menu.addEventListener('wheel',e=>{if(e.deltaY){e.preventDefault();menu.scrollLeft+=e.deltaY;}});
 
-  /* клік по карті */
+  /* додаємо чи малюємо курс */
   map.on('click',e=>{
-    if(!selected||!(selected in icons))return;
+    // якщо вибрано дрона для курсу
+    if(activeIdx!==null){
+      const dr=drones[activeIdx];const A=dr.marker.getLatLng();const B=e.latlng;setCourse(dr,A,B);activeIdx=null;return;}
+
+    // якщо є вибраний тип — ставимо нового бпла
+    if(!selectedType||!(selectedType in icons))return;
     const idx=drones.length;
-    const marker=L.marker(e.latlng,{icon:icons[selected],draggable:true,rotationOrigin:'center'}).addTo(map);
+    const marker=L.marker(e.latlng,{icon:icons[selectedType],draggable:true,rotationOrigin:'center'}).addTo(map);
     const shadow=L.polyline([],{color:'#fff',weight:4,opacity:.5,interactive:false}).addTo(map);
     const line=L.polyline([],{color:'#000',weight:2,interactive:false}).addTo(map);
 
-    const dr={marker,shadow,line,decor:null,rotOffset:ROT_OFFSET[selected]??ROT_OFFSET.default,path:[e.latlng],dragging:false,_raf:0,_arrowRAF:0};
+    const dr={marker,shadow,line,decor:null,rotOffset:ROT_OFFSET[selectedType]??ROT_OFFSET.default,path:[e.latlng],dragging:false,_raf:0,_arrowRAF:0};
     drones.push(dr);
 
-    /* helper to redraw arrows без кліків  */
-    const drawArrows=()=>{
-      if(dr.decor)map.removeLayer(dr.decor);
-      dr.decor=L.polylineDecorator(line,{interactive:false,patterns:[{offset:'0%',repeat:REPEAT,symbol:L.Symbol.arrowHead({pixelSize:SMALL_ARROW,polygon:false,pathOptions:{stroke:true,color:'#000',weight:2,interactive:false}})}]}).addTo(map);
-      animateArrows(dr); // запуск руху
-    };
-
     marker.on('dragstart',()=>dr.dragging=true);
-    marker.on('dragend',()=>{
-      dr.dragging=false;
-      dr.path.push(marker.getLatLng());if(dr.path.length>MAX_POINTS)dr.path.shift();
-      shadow.setLatLngs(dr.path);line.setLatLngs(dr.path);
-      const A=dr.path.at(-2),B=dr.path.at(-1);const ang=bearing(A,B);
-      if(marker.setRotationAngle)marker.setRotationAngle(ang-dr.rotOffset);
-      drawArrows();
-      startLoop(dr,A,B);
-    });
+    marker.on('dragend',()=>{dr.dragging=false;activeIdx=null;});
 
-    marker.bindPopup(`<b>${selected.toUpperCase()}</b><br>Курс: <input id="h_${idx}" type="number" min="0" max="359" value="0" style="width:60px"> <button onclick="setHeading(${idx},document.getElementById('h_${idx}').value)">OK</button><br><button onclick="removeDrone(${idx})">Видалити</button>`).openPopup();
+    // клік по маркеру → вибираємо його для побудови курсу
+    marker.on('click',ev=>{activeIdx=idx;ev.originalEvent.stopPropagation();});
+
+    // popup тільки для видалення
+    marker.bindPopup(`<button onclick="removeDrone(${idx})">Видалити</button>`);
   });
 });
 
-/***********************  Анімація БпЛА  ***************************/
-function startLoop(dr,A,B){cancelAnimationFrame(dr._raf);const step=ts=>{const t=((ts)%ANIM_MS)/ANIM_MS;const lat=A.lat+(B.lat-A.lat)*t;const lng=A.lng+(B.lng-A.lng)*t;dr.marker.setLatLng([lat,lng]);dr._raf=requestAnimationFrame(step);};dr._raf=requestAnimationFrame(step);}
+/***********************  Функції курсу  ***************************/
+function setCourse(dr,A,B){
+  // оновити шлях
+  dr.path=[A,B]; // ми тримаємо тільки 2 точки для чіткого A->B
+  dr.shadow.setLatLngs(dr.path);
+  dr.line.setLatLngs(dr.path);
 
-/***********************  Анімація стрілок  ************************/ 
+  const ang=bearing(A,B);
+  if(dr.marker.setRotationAngle)dr.marker.setRotationAngle(ang-dr.rotOffset);
+
+  drawArrows(dr);
+  startLoop(dr,A,B);
+}
+
+function drawArrows(dr){
+  if(dr.decor)map.removeLayer(dr.decor);
+  dr.decor=L.polylineDecorator(dr.line,{interactive:false,patterns:[{offset:'0%',repeat:REPEAT,symbol:L.Symbol.arrowHead({pixelSize:SMALL_ARROW,polygon:false,pathOptions:{stroke:true,color:'#000',weight:2,interactive:false}})}]}).addTo(map);
+  animateArrows(dr);
+}
+
+/***********************  Анімація   ******************************/
+function startLoop(dr,A,B){cancelAnimationFrame(dr._raf);const step=ts=>{const t=((ts)%ANIM_MS)/ANIM_MS;const lat=A.lat+(B.lat-A.lat)*t;const lng=A.lng+(B.lng-A.lng)*t;dr.marker.setLatLng([lat,lng]);dr._raf=requestAnimationFrame(step);};dr._raf=requestAnimationFrame(step);}
 function animateArrows(dr){cancelAnimationFrame(dr._arrowRAF);let off=0;const tick=()=>{off=(off+1)%100;if(dr.decor)dr.decor.setPatterns([{offset:`${off}%`,repeat:REPEAT,symbol:L.Symbol.arrowHead({pixelSize:SMALL_ARROW,polygon:false,pathOptions:{stroke:true,color:'#000',weight:2,interactive:false}})}]);dr._arrowRAF=requestAnimationFrame(tick);};tick();}
 </script>
 </body>
