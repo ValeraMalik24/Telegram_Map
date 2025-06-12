@@ -17,6 +17,7 @@
     html, body { margin: 0; padding: 0; }
     #map { height: 100vh; width: 100vw; }
 
+    /* === Горизонтальне меню (Grid + скрол) === */
     .menu {
       position: absolute;
       bottom: 10px;
@@ -25,10 +26,27 @@
       background: rgba(255, 255, 255, 0.95);
       padding: 8px 12px;
       border-radius: 8px;
-      display: flex;
+      display: grid;
+      grid-auto-flow: column;
+      grid-auto-columns: min-content;
       gap: 12px;
-      z-index: 1000;
+      max-width: 640px;
+      overflow-x: auto;
+      scrollbar-width: none;          /* Firefox */
+      -ms-overflow-style: none;       /* IE/Edge */
       box-shadow: 0 0 6px rgba(0, 0, 0, 0.25);
+      z-index: 1000;
+    }
+    .menu::-webkit-scrollbar { display: none; } /* Chrome/Safari */
+
+    /* правий градієнт-підказка */
+    .menu::after {
+      content: "";
+      position: absolute;
+      top: 0; right: 0;
+      width: 32px; height: 100%;
+      pointer-events: none;
+      background: linear-gradient(to right, rgba(255,255,255,0), rgba(0,0,0,0.15));
     }
 
     .menu-item {
@@ -88,14 +106,14 @@
 </div>
 
 <script>
-// === 1. Ініціалізація карти ===
+/***** 1. Карта *****/
 const map = L.map('map').setView([49.9, 36.3], 10);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 18,
   attribution: '&copy; OpenStreetMap contributors'
 }).addTo(map);
 
-// === 2. Іконки ===
+/***** 2. Іконки *****/
 const icons = {
   shahed:   L.icon({ iconUrl: 'shahed.png',   iconSize: [36, 36] }),
   orlan:    L.icon({ iconUrl: 'orlan.png',    iconSize: [36, 36] }),
@@ -106,32 +124,56 @@ const icons = {
   "невідомий": L.icon({ iconUrl: 'невідомий.png', iconSize: [36, 36] })
 };
 
-// === 3. Змінні ===
+/***** 3. Стан *****/
 let selectedType = null;
 const drones = [];
+const MAX_TAIL_POINTS = 6; // 1 старт + 5 останніх точок => 5 сегментів
 
-// === 4. Меню вибору типу ===
-document.getElementById('menu').addEventListener('click', (e) => {
+/***** 4. Меню вибору *****/
+const menu = document.getElementById('menu');
+menu.addEventListener('click', e => {
   const item = e.target.closest('.menu-item');
   if (!item) return;
   document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('selected'));
   item.classList.add('selected');
   selectedType = item.dataset.type;
 });
+// горизонтальний скрол коліщатком
+menu.addEventListener('wheel', e => {
+  if (e.deltaY === 0) return;
+  e.preventDefault();
+  menu.scrollLeft += e.deltaY;
+});
 
-// === 5. Функція обчислення точки призначення ===
-function destinationPoint(lat, lon, brng, distKm) {
-  const R = 6371, d = distKm / R, b = brng * Math.PI / 180;
-  const lat1 = lat * Math.PI / 180, lon1 = lon * Math.PI / 180;
-  const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(b));
-  const lon2 = lon1 + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(lat1), Math.cos(d) - Math.sin(lat1) * Math.sin(lat2));
-  return [lat2 * 180 / Math.PI, lon2 * 180 / Math.PI];
+/***** 5. Допоміжні *****/
+function drawMovementArrow(drone, from, to) {
+  if (drone.arrow) map.removeLayer(drone.arrow);
+  drone.arrow = L.polyline([from, to], {
+    color: 'red',
+    weight: 4,
+    dashArray: '6,4'
+  }).addTo(map);
 }
 
-// === 6. Додавання БпЛА ===
+function animateMarker(marker, start, end, duration = 500, cb) {
+  const startLat = start.lat, startLng = start.lng;
+  const diffLat = end.lat - start.lat;
+  const diffLng = end.lng - start.lng;
+  let startTime = null;
+  function step(ts) {
+    if (!startTime) startTime = ts;
+    const progress = Math.min((ts - startTime) / duration, 1);
+    marker.setLatLng([startLat + diffLat * progress, startLng + diffLng * progress]);
+    if (progress < 1) requestAnimationFrame(step); else if (cb) cb();
+  }
+  // ставимо маркер назад на старт і починаємо анімацію
+  marker.setLatLng(start);
+  requestAnimationFrame(step);
+}
+
+/***** 6. Додавання дрона *****/
 map.on('click', e => {
   if (!selectedType || !(selectedType in icons)) return;
-
   const rotationOffset = selectedType === "невідомий" ? 0 : 45;
 
   // Маркер
@@ -142,79 +184,62 @@ map.on('click', e => {
     rotationOrigin: 'center center'
   }).addTo(map);
 
-  // Дві поліліни: тінь + основа
+  // Поліліни (тінь + основа)
   const shadow = L.polyline([e.latlng], {
-    color: '#ffffff',        // світла підложка
-    weight: 8,
-    opacity: 0.6
+    color: '#ffffff', weight: 8, opacity: 0.6
   }).addTo(map);
-
   const line = L.polyline([e.latlng], {
-    color: '#000000',        // чорна тонка лінія
-    weight: 4,
-    opacity: 1
+    color: '#000000', weight: 4, opacity: 1
   }).addTo(map);
 
-  // Обʼєкт дрона
+  // Об'єкт дрона
   const index = drones.length;
-  const drone = { marker, shadow, line, arrow: null, heading: 0, offset: rotationOffset };
+  const drone = {
+    marker,
+    shadow,
+    line,
+    arrow: null,
+    coords: [e.latlng],
+    rotationOffset
+  };
   drones.push(drone);
 
-  // === Drag ===
-  marker.on('dragstart', () => drone.lastPos = marker.getLatLng());
+  /*** Drag ***/
+  let startPos;
+  marker.on('dragstart', () => { startPos = marker.getLatLng(); });
 
   marker.on('dragend', () => {
-    const newPos = marker.getLatLng();
-    // додаємо точку в обидві лінії
-    drone.shadow.addLatLng(newPos);
-    drone.line.addLatLng(newPos);
-    updateHeading(drone);
+    const endPos = marker.getLatLng();
+    animateMarker(marker, startPos, endPos, 500, () => {
+      // після анімації: оновлюємо хвіст
+      drone.coords.push(endPos);
+      while (drone.coords.length > MAX_TAIL_POINTS) drone.coords.shift();
+      drone.shadow.setLatLngs(drone.coords);
+      drone.line.setLatLngs(drone.coords);
+      if (drone.coords.length >= 2) {
+        const from = drone.coords[drone.coords.length - 2];
+        const to = drone.coords[drone.coords.length - 1];
+        drawMovementArrow(drone, from, to);
+      }
+    });
   });
 
-  // === Popup ===
+  /*** Popup ***/
   const popup = L.popup().setContent(`
     <b>${selectedType.toUpperCase()}</b><br>
-    Курс (0–359°): <input id="headingInput_${index}" type="number" min="0" max="359" style="width: 60px;" value="0" /><br>
-    <button onclick="updateHeadingFromPopup(${index})">OK</button>
     <button onclick="removeDrone(${index})">Видалити</button>
   `);
-
   marker.bindPopup(popup).openPopup();
 });
 
-// === 7. Оновлення курсу ===
-function updateHeadingFromPopup(index) {
-  const input = document.getElementById(`headingInput_${index}`);
-  if (!input) return;
-  const heading = parseFloat(input.value);
-  if (isNaN(heading)) return;
-  const drone = drones[index];
-  if (!drone) return;
-  drone.heading = heading;
-  drone.marker.setRotationAngle(heading - drone.offset);
-  updateHeading(drone);
-  drone.marker.closePopup();
-}
-
-function updateHeading(drone) {
-  if (drone.arrow) map.removeLayer(drone.arrow);
-  const from = drone.marker.getLatLng();
-  const to = destinationPoint(from.lat, from.lng, drone.heading, 2);
-  drone.arrow = L.polyline([from, to], {
-    color: 'red',
-    weight: 4,
-    dashArray: '6,4'
-  }).addTo(map);
-}
-
-// === 8. Видалення БпЛА ===
+/***** 7. Видалення дрона *****/
 function removeDrone(index) {
   const drone = drones[index];
   if (!drone) return;
   map.removeLayer(drone.marker);
-  if (drone.arrow) map.removeLayer(drone.arrow);
-  map.removeLayer(drone.line);
   map.removeLayer(drone.shadow);
+  map.removeLayer(drone.line);
+  if (drone.arrow) map.removeLayer(drone.arrow);
   drones[index] = null;
 }
 </script>
