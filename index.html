@@ -8,11 +8,11 @@
 
   <!-- Leaflet core -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin></script>
 
-  <!-- Plugins -->
-  <script src="https://cdn.jsdelivr.net/npm/leaflet-rotatedmarker@0.2.0/leaflet.rotatedMarker.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.polylinedecorator/1.7.0/leaflet.polylineDecorator.min.js"></script>
+  <!-- Plugins (crossorigin to avoid CORB) -->
+  <script src="https://cdn.jsdelivr.net/npm/leaflet-rotatedmarker@0.2.0/leaflet.rotatedMarker.js" crossorigin></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet.polylinedecorator@1.7.0/dist/leaflet.polylineDecorator.min.js" crossorigin></script>
 
   <style>
     html,body{margin:0;padding:0}
@@ -33,19 +33,22 @@
 
 <script>
 /***********************  CONFIG  *********************************/
-const TYPES=[['shahed',36],['shaheds',72],['orlan',36],['zala',36],['molniya',36],['lancet',36],['supercam',36],['kab',72],['rocket',72],['невідомий',36]];
+const TYPES=[
+  ['shahed',36],['shaheds',72],['orlan',36],['zala',36],['molniya',36],['lancet',36],
+  ['supercam',36],['kab',72],['rocket',72],['невідомий',36]
+];
 const ROT_OFFSET={kab:135,'невідомий':0,default:45};
-const ANIM_MS=6000;          // цикл переміщення бпла (ms)
-const SMALL_ARROW=8;         // розмір бігаючих стрілок (px)
+const ANIM_MS=6000;          // цикл A→B (ms)
+const SMALL_ARROW=8;         // бігаючі стрілки (px)
 const REPEAT='10%';          // крок між стрілками
-const PROJ_DIST=3000;        // прогнозований маршрут, м
+const PROJ_DIST=3000;        // прогнозований сегмент (м)
 /******************************************************************/
 
 // ── globals ─────────────────────────────────────────────────────
 let map=null;
-const drones=[];                // масив усіх дронів
-let selectedType=null;          // обраний пункт меню
-let activeIdx=null;             // дрон, якому прокладаємо курс
+const drones=[];
+let selectedType=null;
+let activeIdx=null;
 
 const hasRotate=typeof L.rotatedMarker==='function';
 
@@ -59,26 +62,50 @@ window.removeDrone=idx=>{const dr=drones[idx];if(!dr)return;cancelAnimationFrame
 window.setParams=(idx,alt,speed)=>{const dr=drones[idx];if(!dr)return;dr.alt=+alt||0;dr.speed=+speed||0;dr.marker.closePopup();};
 
 /***********************  INIT  ***********************************/
-window.addEventListener('DOMContentLoaded',()=>{
-  /* ── map ── */
+document.addEventListener('DOMContentLoaded',()=>{
+  /* map */
   map=L.map('map').setView([49.9,36.3],10);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© OpenStreetMap'}).addTo(map);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    maxZoom:18,
+    attribution:'© OpenStreetMap'
+  }).addTo(map);
 
-  /* ── menu ── */
+  /* menu */
   const icons={};
   const menu=document.getElementById('menu');
-  TYPES.forEach(([n,s])=>{icons[n]=makeIcon(n,s);const el=document.createElement('div');el.className='menu-item';el.dataset.type=n;el.innerHTML=`<button><img src="${n}.png"></button><span>${n}</span>`;menu.appendChild(el);});
-  menu.addEventListener('click',e=>{const it=e.target.closest('.menu-item');if(!it)return;menu.querySelectorAll('.menu-item').forEach(x=>x.classList.remove('selected'));it.classList.add('selected');selectedType=it.dataset.type;activeIdx=null;});
+  TYPES.forEach(([n,s])=>{
+    icons[n]=makeIcon(n,s);
+    const el=document.createElement('div');
+    el.className='menu-item';
+    el.dataset.type=n;
+    el.innerHTML=`<button><img src="${n}.png"></button><span>${n}</span>`;
+    menu.appendChild(el);
+  });
+  menu.addEventListener('click',e=>{
+    const it=e.target.closest('.menu-item');
+    if(!it) return;
+    menu.querySelectorAll('.menu-item').forEach(x=>x.classList.remove('selected'));
+    it.classList.add('selected');
+    selectedType=it.dataset.type;
+    activeIdx=null;
+  });
   menu.addEventListener('wheel',e=>{if(e.deltaY){e.preventDefault();menu.scrollLeft+=e.deltaY;}});
 
-  /* ── map click ── */
+  /* map click */
   map.on('click',e=>{
-    // 1) завершуємо прокладання курсу
+    // завершуємо курс
     if(activeIdx!==null){
-      const dr=drones[activeIdx];setCourse(dr,dr.marker.getLatLng(),e.latlng);activeIdx=null;return;}
-
-    // 2) ставимо новий дрон, якщо вибрано тип
-    if(selectedType){addDrone(e.latlng,selectedType,icons[selectedType]);menu.querySelectorAll('.menu-item').forEach(x=>x.classList.remove('selected'));selectedType=null;}
+      const dr=drones[activeIdx];
+      setCourse(dr,dr.marker.getLatLng(),e.latlng);
+      activeIdx=null;
+      return;
+    }
+    // додаємо нового дрона
+    if(selectedType){
+      addDrone(e.latlng,selectedType,icons[selectedType]);
+      menu.querySelectorAll('.menu-item').forEach(x=>x.classList.remove('selected'));
+      selectedType=null;
+    }
   });
 });
 
@@ -114,18 +141,6 @@ function setCourse(dr,A,B){
 }
 
 function drawProjection(dr,startPt,ang){
-  if(dr.proj)map.removeLayer(dr.proj);
+  if(dr.proj) map.removeLayer(dr.proj);
   const endPt=destPoint(startPt,ang,PROJ_DIST);
-  dr.proj=L.polyline([startPt,endPt],{color:'#000',weight:1,dashArray:'6 6',interactive:false}).addTo(map);
-}
-
-/***********************  decorations  ***************************/
-function drawArrows(dr){
-  if(dr.decor)map.removeLayer(dr.decor);
-  dr.decor=L.polylineDecorator(dr.line,{interactive:false,patterns:[{offset:'0%',repeat:REPEAT,symbol:L.Symbol.arrowHead({pixelSize:SMALL_ARROW,polygon:false,pathOptions:{stroke:true,color:'#000',weight:2,interactive:false}})}]}).addTo(map);
-  animateArrows(dr);
-}
-
-/***********************  animations  ****************************/
-function startLoop(dr,A,B){
-  cancelAnimationFrame
+  dr.proj=L.polyline([startPt,end
