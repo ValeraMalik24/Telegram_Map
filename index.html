@@ -1,112 +1,143 @@
-<!DOCTYPE html>
-<html lang="uk">
+<!DOCTYPE html><html lang="uk">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <title>Троянда ІНФО📡</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="icon" href="favicon.png" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="favicon.png">
 
-  <!-- Leaflet core (без SRI, щоб не блокувався браузером) -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-  <!-- Plugins -->
-  <script src="https://unpkg.com/leaflet-rotatedmarker@0.2.0/leaflet.rotatedMarker.js" crossorigin=""></script>
-  <!-- УВАГА: у пакеті decorator файл називається polylineDecorator (велика D) -->
-  <script src="https://unpkg.com/leaflet-polylinedecorator@1.7.0/dist/leaflet.polylineDecorator.min.js" crossorigin=""></script>
+  <!-- Plugins (локальний decorator, щоб не було CORS) -->
+  <script src="https://unpkg.com/leaflet-rotatedmarker@0.2.0/leaflet.rotatedMarker.js"></script>
+  <script src="leaflet.polylineDecorator.js"></script>
 
   <style>
     html,body{margin:0;padding:0}
     #map{width:100vw;height:100vh}
-
-    /* меню типів БпЛА */
-    .menu{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);
-      background:rgba(255,255,255,.95);padding:8px 12px;border-radius:8px;display:grid;
-      grid-auto-flow:column;grid-auto-columns:min-content;gap:12px;max-width:640px;overflow-x:auto;
+    .menu{position:absolute;bottom:10px;left:50%;
+      transform:translateX(-50%);background:rgba(255,255,255,.95);
+      padding:8px 12px;border-radius:8px;display:grid;grid-auto-flow:column;
+      grid-auto-columns:min-content;gap:12px;max-width:640px;overflow-x:auto;
       scrollbar-width:none;box-shadow:0 0 6px rgba(0,0,0,.25);z-index:1000}
     .menu::-webkit-scrollbar{display:none}
     .menu-item{text-align:center;font:12px/1 sans-serif}
-    .menu-item button{background:none;border:2px solid transparent;border-radius:6px;padding:2px;margin-bottom:4px;cursor:pointer}
+    .menu-item button{background:none;border:2px solid transparent;border-radius:6px;
+      padding:2px;margin-bottom:4px;cursor:pointer}
     .menu-item.selected button{border-color:#007bff;box-shadow:0 0 4px #007bff}
     .menu-item img{width:36px;height:36px;border-radius:4px}
   </style>
 </head>
 <body>
-  <div id="map"></div>
-  <div id="menu" class="menu"></div>
+<div id="map"></div><div id="menu" class="menu"></div>
 
 <script>
-/***********************  CONFIG  *********************************/
-const TYPES=[['shahed',36],['shaheds',72],['orlan',36],['zala',36],['molniya',36],['lancet',36],['supercam',36],['kab',72],['rocket',72],['невідомий',36]];
+/* ---------- Конфіг ---------- */
+const TYPES=[
+  ['shahed',36],['shaheds',72],['orlan',36],['zala',36],['molniya',36],
+  ['lancet',36],['supercam',36],['kab',72],['rocket',72],['невідомий',36]];
 const ROT_OFFSET={kab:135,'невідомий':0,default:45};
-const ANIM_MS=6000;          // цикл A→B (ms)
-const SMALL_ARROW=8;         // біжучі стрілки
-const REPEAT='10%';          // крок декору
-const PROJ_DIST=3000;        // прогноз 3 км
-/******************************************************************/
+const ANIM_MS=6000, SMALL_ARROW=8, REPEAT='10%', PROJ_DIST=3000;
 
-let map=null;
-const drones=[];
-let selectedType=null;
-let activeIdx=null;
+/* ---------- Глобальні змінні ---------- */
+let map=null, drones=[], selectedType=null, activeIdx=null;
 
-/* ── утиліти ── */
-function makeIcon(name,size){return L.icon({iconUrl:`${name}.png`,iconSize:[size,size],iconAnchor:[size/2,size/2]});}
-function bearing(a,b){const φ1=a.lat*Math.PI/180,φ2=b.lat*Math.PI/180,Δλ=(b.lng-a.lng)*Math.PI/180;const y=Math.sin(Δλ)*Math.cos(φ2);const x=Math.cos(φ1)*Math.sin(φ2)-Math.sin(φ1)*Math.cos(φ2)*Math.cos(Δλ);return(Math.atan2(y,x)*180/Math.PI+360)%360;}
-function destPoint(pt,brg,dist){const R=6371000,δ=dist/R,θ=brg*Math.PI/180;const φ1=pt.lat*Math.PI/180,λ1=pt.lng*Math.PI/180;const φ2=Math.asin(Math.sin(φ1)*Math.cos(δ)+Math.cos(φ1)*Math.sin(δ)*Math.cos(θ));const λ2=λ1+Math.atan2(Math.sin(θ)*Math.sin(δ)*Math.cos(φ1),Math.cos(δ)-Math.sin(φ1)*Math.sin(φ2));return L.latLng(φ2*180/Math.PI,(λ2*180/Math.PI+540)%360-180);} // нормаліз. довготи
+/* ---------- Утиліти ---------- */
+const makeIcon=(n,s)=>L.icon({iconUrl:`${n}.png`,iconSize:[s,s],iconAnchor:[s/2,s/2]});
+const bearing=(a,b)=>{const toRad=d=>d*Math.PI/180;
+  const φ1=toRad(a.lat),φ2=toRad(b.lat),dλ=toRad(b.lng-a.lng);
+  const y=Math.sin(dλ)*Math.cos(φ2),
+        x=Math.cos(φ1)*Math.sin(φ2)-Math.sin(φ1)*Math.cos(φ2)*Math.cos(dλ);
+  return (Math.atan2(y,x)*180/Math.PI+360)%360};
+const destPoint=(pt,brg,dist)=>{const R=6371000,δ=dist/R,θ=brg*Math.PI/180;
+  const φ1=pt.lat*Math.PI/180,λ1=pt.lng*Math.PI/180;
+  const φ2=Math.asin(Math.sin(φ1)*Math.cos(δ)+Math.cos(φ1)*Math.sin(δ)*Math.cos(θ));
+  const λ2=λ1+Math.atan2(Math.sin(θ)*Math.sin(δ)*Math.cos(φ1),Math.cos(δ)-Math.sin(φ1)*Math.sin(φ2));
+  return L.latLng(φ2*180/Math.PI,(λ2*180/Math.PI+540)%360-180)};
 
-/* ── popup helpers ── */
-window.removeDrone=idx=>{const dr=drones[idx];if(!dr)return;cancelAnimationFrame(dr._raf);cancelAnimationFrame(dr._arrowRAF);[dr.marker,dr.shadow,dr.line,dr.decor,dr.proj].forEach(l=>l && map.removeLayer(l));drones[idx]=null;};
-window.setParams=(idx,alt,speed)=>{const dr=drones[idx];if(!dr)return;dr.alt=+alt||0;dr.speed=+speed||0;dr.marker.closePopup();};
+/* ---------- Popup helpers ---------- */
+window.removeDrone=idx=>{const d=drones[idx];if(!d)return;
+  cancelAnimationFrame(d._raf);cancelAnimationFrame(d._arrowRAF);
+  [d.marker,d.shadow,d.line,d.decor,d.proj].forEach(l=>l&&map.removeLayer(l));
+  drones[idx]=null;};
+window.setParams=(i,a,s)=>{const d=drones[i];if(d){d.alt=+a||0;d.speed=+s||0;d.marker.closePopup()}};
 
-/***********************  INIT  ***********************************/
+/* ---------- Init ---------- */
 document.addEventListener('DOMContentLoaded',()=>{
+  /* карта */
   map=L.map('map').setView([49.9,36.3],10);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© OpenStreetMap'}).addTo(map);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    {maxZoom:18,attribution:'© OpenStreetMap'}).addTo(map);
 
-  // меню
-  const icons={};
-  const menu=document.getElementById('menu');
-  TYPES.forEach(([n,s])=>{icons[n]=makeIcon(n,s);const el=document.createElement('div');el.className='menu-item';el.dataset.type=n;el.innerHTML=`<button><img src='${n}.png'></button><span>${n}</span>`;menu.appendChild(el);});
-  menu.addEventListener('click',e=>{const it=e.target.closest('.menu-item');if(!it)return;menu.querySelectorAll('.menu-item').forEach(x=>x.classList.remove('selected'));it.classList.add('selected');selectedType=it.dataset.type;activeIdx=null;});
+  /* меню */
+  const icons={}, menu=document.getElementById('menu');
+  TYPES.forEach(([n,s])=>{
+    icons[n]=makeIcon(n,s);
+    menu.insertAdjacentHTML('beforeend',
+      `<div class="menu-item" data-type="${n}">
+         <button><img src="${n}.png"></button><span>${n}</span>
+       </div>`);});
+  menu.onclick=e=>{
+    const it=e.target.closest('.menu-item'); if(!it) return;
+    menu.querySelectorAll('.menu-item').forEach(x=>x.classList.remove('selected'));
+    it.classList.add('selected'); selectedType=it.dataset.type; activeIdx=null;};
+  menu.onwheel=e=>{if(e.deltaY){e.preventDefault();menu.scrollLeft+=e.deltaY;}};
 
-  // коліщатко
-  menu.addEventListener('wheel',e=>{if(e.deltaY){e.preventDefault();menu.scrollLeft+=e.deltaY;}});
-
-  // клік по карті
+  /* клік по карті */
   map.on('click',e=>{
-    if(activeIdx!==null){const dr=drones[activeIdx];setCourse(dr,dr.marker.getLatLng(),e.latlng);activeIdx=null;return;}
-    if(selectedType){addDrone(e.latlng,selectedType,icons[selectedType]);menu.querySelectorAll('.menu-item').forEach(x=>x.classList.remove('selected'));selectedType=null;}
+    if(activeIdx!==null){const d=drones[activeIdx];
+      setCourse(d,d.marker.getLatLng(),e.latlng);activeIdx=null;return;}
+    if(selectedType){addDrone(e.latlng,selectedType,icons[selectedType]);
+      menu.querySelectorAll('.menu-item').forEach(x=>x.classList.remove('selected'));
+      selectedType=null;}
   });
 });
 
-/***********************  addDrone  *******************************/
-function addDrone(latlng,type,icon){
-  const idx=drones.length;
-  const marker=L.marker(latlng,{icon,draggable:true,rotationOrigin:'center'}).addTo(map);
-  const shadow=L.polyline([], {color:'#fff',weight:4,opacity:.5,interactive:false}).addTo(map);
-  const line  =L.polyline([], {color:'#000',weight:2,interactive:false}).addTo(map);
-  const dr={marker,shadow,line,decor:null,proj:null,rotOffset:ROT_OFFSET[type]??ROT_OFFSET.default,path:[latlng],alt:0,speed:0,dragging:false,_raf:0,_arrowRAF:0};
-  drones.push(dr);
-
-  marker.on('dragstart',()=>dr.dragging=true);
-  marker.on('dragend',()=>{dr.dragging=false;activeIdx=null;});
+/* ---------- Дрон ---------- */
+function addDrone(lat,type,icon){
+  const idx=drones.length, marker=L.marker(lat,{icon,draggable:true,rotationOrigin:'center'}).addTo(map),
+        shadow=L.polyline([], {color:'#fff',weight:4,opacity:.5,interactive:false}).addTo(map),
+        line  =L.polyline([], {color:'#000',weight:2,interactive:false}).addTo(map);
+  const d={marker,shadow,line,decor:null,proj:null,rotOffset:ROT_OFFSET[type]??ROT_OFFSET.default,
+           path:[lat],alt:0,speed:0,_raf:0,_arrowRAF:0};
+  drones.push(d);
+  marker.on('dragstart',()=>d.dragging=true);
+  marker.on('dragend',()=>{d.dragging=false;activeIdx=null;});
   marker.on('click',ev=>{activeIdx=idx;ev.originalEvent.stopPropagation();});
-
-  marker.bindPopup(`Висота: <input id='alt_${idx}' type='number' value='${dr.alt}' style='width:50px'>м<br>Швидкість: <input id='spd_${idx}' type='number' value='${dr.speed}' style='width:50px'>км/год<br><button onclick="setParams(${idx},document.getElementById('alt_${idx}').value,document.getElementById('spd_${idx}').value)">OK</button><br><button onclick="removeDrone(${idx})">Видалити</button>`);
+  marker.bindPopup(
+    `Висота: <input id="alt${idx}" type="number" value="${d.alt}" style="width:50px">м<br>
+     Швидкість: <input id="spd${idx}" type="number" value="${d.speed}" style="width:50px">км/год<br>
+     <button onclick="setParams(${idx},alt${idx}.value,spd${idx}.value)">OK</button><br>
+     <button onclick="removeDrone(${idx})">Видалити</button>`);
 }
 
-/****************   Курс + проекція   *****************************/
-function setCourse(dr,A,B){
-  dr.path=[A,B];
-  dr.shadow.setLatLngs(dr.path);
-  dr.line.setLatLngs(dr.path);
+/* ---------- Курс, прогноз і анімації ---------- */
+function setCourse(d,A,B){
+  d.path=[A,B]; d.shadow.setLatLngs(d.path); d.line.setLatLngs(d.path);
   const ang=bearing(A,B);
-  if(dr.marker.setRotationAngle)dr.marker.setRotationAngle(ang-dr.rotOffset);
-  drawArrows(dr);
-  drawProjection(dr,B,ang);
-  startLoop(dr,A,B);
+  d.marker.setRotationAngle?.(ang-d.rotOffset);
+  drawArrows(d); drawProjection(d,B,ang); startLoop(d,A,B);
 }
-function drawProjection(dr,from,ang){if(dr.proj)map.removeLayer(dr.proj);const to=destPoint(from,ang,PROJ_DIST);dr.proj=L.polyline([from,to],{color:'#000',weight:1,dashArray:'6 6',interactive:false}).addTo(map);} 
-
-/***********************  decorations
+function drawProjection(d,from,ang){
+  d.proj&&map.removeLayer(d.proj);
+  d.proj=L.polyline([from,destPoint(from,ang,PROJ_DIST)],
+    {color:'#000',weight:1,dashArray:'6 6',interactive:false}).addTo(map);}
+function drawArrows(d){
+  d.decor&&map.removeLayer(d.decor);
+  d.decor=L.polylineDecorator(d.line,{interactive:false,patterns:[{offset:'0%',repeat:REPEAT,
+    symbol:L.Symbol.arrowHead({pixelSize:SMALL_ARROW,polygon:false,
+    pathOptions:{stroke:true,color:'#000',weight:2,interactive:false}})}]}).addTo(map);
+  animateArrows(d);}
+function startLoop(d,A,B){
+  cancelAnimationFrame(d._raf);
+  const step=t=>{const p=((t)%ANIM_MS)/ANIM_MS;
+    d.marker.setLatLng([A.lat+(B.lat-A.lat)*p, A.lng+(B.lng-A.lng)*p]);
+    d._raf=requestAnimationFrame(step);};
+  d._raf=requestAnimationFrame(step);}
+function animateArrows(d){
+  cancelAnimationFrame(d._arrowRAF); let off=0;
+  const tick=()=>{off=(off+1)%100;
+    d.decor.setPatterns([{offset:`${off}%`,repeat:REPEAT,
+      symbol:L.Symbol.arrowHead({pixelSize:SMALL_ARROW,polygon:false,
+      pathOptions:{stroke
