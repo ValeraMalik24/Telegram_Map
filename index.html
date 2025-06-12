@@ -7,10 +7,7 @@
   <link rel="icon" href="favicon.png" />
 
   <!-- Leaflet CSS -->
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-  />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
   <!-- Ваши стили -->
   <link rel="stylesheet" href="style.css" />
@@ -107,38 +104,64 @@
   <script src="https://cdn.jsdelivr.net/npm/leaflet-rotatedmarker@0.2.0/leaflet.rotatedMarker.js"></script>
 
   <script>
+    /* ---------------------------------------------------------------------
+       Глобальний стан і функції, щоб popup одразу бачив їх у window
+    --------------------------------------------------------------------- */
+    window.drones = [];
+
+    window.setHeading = function (idx, val) {
+      const v = parseFloat(val);
+      if (isNaN(v)) return;
+      const dr = window.drones[idx];
+      if (!dr) return;
+      dr.marker.setRotationAngle(v - dr.rot);
+      if (dr.arrow) dr.arrow.setRotationAngle(v - 90);
+      dr.marker.closePopup();
+    };
+
+    window.removeDrone = function (idx) {
+      const dr = window.drones[idx];
+      if (!dr) return;
+      cancelAnimationFrame(dr._anim);
+      [dr.marker, dr.shadow, dr.line, dr.arrow].forEach(l => l && window.map.removeLayer(l));
+      window.drones[idx] = null;
+    };
+
+    /* ---------------------------------------------------------------------
+       Основна логіка запускається, коли DOM готовий
+    --------------------------------------------------------------------- */
     document.addEventListener('DOMContentLoaded', () => {
-      // 1. Инициализация карты
-      const map = L.map('map').setView([49.9, 36.3], 10);
+      // 1. Ініціалізація карти
+      window.map = L.map('map').setView([49.9, 36.3], 10);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 18,
         attribution: '&copy; OpenStreetMap contributors'
-      }).addTo(map);
+      }).addTo(window.map);
 
-      // 2. Создаём иконки
+      // 2. Створюємо іконки
       function makeIcon(url, size) {
         return L.icon({
           iconUrl: url,
           iconSize: [size, size],
-          iconAnchor: [size/2, size/2]
+          iconAnchor: [size / 2, size / 2]
         });
       }
       const icons = {
-        shahed:   makeIcon('shahed.png', 36),
-        shaheds:  makeIcon('Shaheds.png', 72),
-        orlan:    makeIcon('orlan.png', 36),
-        zala:     makeIcon('zala.png', 36),
-        molniya:  makeIcon('molniya.png', 36),
-        lancet:   makeIcon('lancet.png', 36),
+        shahed: makeIcon('shahed.png', 36),
+        shaheds: makeIcon('Shaheds.png', 72),
+        orlan: makeIcon('orlan.png', 36),
+        zala: makeIcon('zala.png', 36),
+        molniya: makeIcon('molniya.png', 36),
+        lancet: makeIcon('lancet.png', 36),
         supercam: makeIcon('supercam.png', 36),
-        kab:      makeIcon('Kab.png', 72),
-        rocket:   makeIcon('Rocket.png', 72),
+        kab: makeIcon('Kab.png', 72),
+        rocket: makeIcon('Rocket.png', 72),
         'невідомий': makeIcon('невідомий.png', 36)
       };
       const arrowIcon = makeIcon('arrow.png', 24);
-      const rotOffset = { kab:135, 'невідомий':0, default:45 };
+      const rotOffset = { kab: 135, 'невідомий': 0, default: 45 };
 
-      // 3. Меню выбора
+      // 3. Меню вибору
       const menu = document.getElementById('menu');
       let selected = null;
       menu.addEventListener('click', e => {
@@ -155,19 +178,19 @@
         }
       });
 
-      // 4. Гео-утилиты
+      // 4. Гео-утиліти
       function bearing(a, b) {
-        const φ1 = a.lat * Math.PI/180,
-              φ2 = b.lat * Math.PI/180,
-              Δλ = (b.lng - a.lng) * Math.PI/180;
+        const φ1 = a.lat * Math.PI / 180,
+          φ2 = b.lat * Math.PI / 180,
+          Δλ = (b.lng - a.lng) * Math.PI / 180;
         const y = Math.sin(Δλ) * Math.cos(φ2);
-        const x = Math.cos(φ1)*Math.sin(φ2)
-                - Math.sin(φ1)*Math.cos(φ2)*Math.cos(Δλ);
-        return (Math.atan2(y, x) * 180/Math.PI + 360) % 360;
+        const x = Math.cos(φ1) * Math.sin(φ2)
+          - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+        return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
       }
 
-      // 5. Анимация
-      const drones = [];
+      // 5. Анімація
+      const drones = window.drones; // коротке посилання
       const LOOP_MS = 6000;
       function startLoop(dr) {
         cancelAnimationFrame(dr._anim);
@@ -177,49 +200,28 @@
             dr._anim = requestAnimationFrame(step);
             return;
           }
-          const phase = (ts % LOOP_MS)/LOOP_MS;
-          const p = 0.5 - 0.5*Math.cos(2*Math.PI*phase);
-          const lat = dr.from.lat + (dr.to.lat - dr.from.lat)*p;
-          const lng = dr.from.lng + (dr.to.lng - dr.from.lng)*p;
+          const phase = (ts % LOOP_MS) / LOOP_MS;
+          const p = 0.5 - 0.5 * Math.cos(2 * Math.PI * phase);
+          const lat = dr.from.lat + (dr.to.lat - dr.from.lat) * p;
+          const lng = dr.from.lng + (dr.to.lng - dr.from.lng) * p;
           dr.marker.setLatLng([lat, lng]);
           dr._anim = requestAnimationFrame(step);
         };
         dr._anim = requestAnimationFrame(step);
       }
 
-      function setHeading(idx, val) {
-        const v = parseFloat(val);
-        if (isNaN(v)) return;
-        const dr = drones[idx];
-        dr.marker.setRotationAngle(v - dr.rot);
-        if (dr.arrow) dr.arrow.setRotationAngle(v - 90);
-        dr.marker.closePopup();
-      }
-
-      function removeDrone(idx) {
-        const dr = drones[idx];
-        if (!dr) return;
-        cancelAnimationFrame(dr._anim);
-        [dr.marker, dr.shadow, dr.line, dr.arrow].forEach(l => l && map.removeLayer(l));
-        drones[idx] = null;
-      }
-
-      // Экспортируем в глобальную область, чтобы inline-onclick их видел:
-      window.setHeading   = setHeading;
-      window.removeDrone  = removeDrone;
-
-      // 6. Клик по карте
-      map.on('click', e => {
+      // 6. Клік по карті
+      window.map.on('click', e => {
         if (!selected || !(selected in icons)) return;
         const rot = rotOffset[selected] ?? rotOffset.default;
         const marker = L.marker(e.latlng, {
           icon: icons[selected],
           draggable: true,
           rotationOrigin: 'center'
-        }).addTo(map);
+        }).addTo(window.map);
 
-        const shadow = L.polyline([], { color:'#fff', weight:8, opacity:0.6 }).addTo(map);
-        const line   = L.polyline([], { color:'#000', weight:4 }).addTo(map);
+        const shadow = L.polyline([], { color: '#fff', weight: 8, opacity: 0.6 }).addTo(window.map);
+        const line = L.polyline([], { color: '#000', weight: 4 }).addTo(window.map);
 
         const idx = drones.length;
         const dr = {
@@ -243,14 +245,14 @@
         marker.on('dragend', () => {
           dr.dragging = false;
           dr.from = startPos;
-          dr.to   = marker.getLatLng();
+          dr.to = marker.getLatLng();
           shadow.setLatLngs([dr.from, dr.to]);
           line.setLatLngs([dr.from, dr.to]);
-          if (dr.arrow) map.removeLayer(dr.arrow);
+          if (dr.arrow) window.map.removeLayer(dr.arrow);
           dr.arrow = L.rotatedMarker(dr.from, {
             icon: arrowIcon,
             rotationAngle: bearing(dr.from, dr.to) - 90
-          }).addTo(map);
+          }).addTo(window.map);
           startLoop(dr);
         });
 
