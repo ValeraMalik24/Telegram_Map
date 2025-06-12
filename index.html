@@ -6,21 +6,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" href="favicon.png" />
 
-  <!-- Leaflet core -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha512-sA+e4wCX2n7bg0WxZmf0RduCMsZ/HXXIQK5vCk1vZ1tcHTTX3e8DqRL3OjaxAg/P070pPQtO9T0wZPVSBBi4og==" crossorigin=""/>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha512-o8f+aa4Ihiikpjz2uVH54camzato3trENcGukdxbYlR5c+EMF4iAfDdc0pJi/7luWGINuDsrW++PK5+Gos4qQw==" crossorigin=""></script>
+  <!-- Leaflet core : без SRI, щоб не блокувало через checksum -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 
-  <!-- Plugins -->
+  <!-- Plugins (cors‑friendly шляхи) -->
   <script src="https://unpkg.com/leaflet-rotatedmarker@0.2.0/leaflet.rotatedMarker.js" crossorigin=""></script>
-  <!-- correct filename: leaflet.polylineDecorator.min.js (capital D) -->
-  <script src="https://unpkg.com/leaflet-polylinedecorator@1.7.0/dist/leaflet.polylineDecorator.min.js" crossorigin=""></script>
+  <!-- polylineDecorator.min.js відсутній у пакеті, є тільки .js -->
+  <script src="https://unpkg.com/leaflet-polylinedecorator@1.7.0/dist/leaflet.polylineDecorator.js" crossorigin=""></script>
 
   <style>
     html,body{margin:0;padding:0}
     #map{width:100vw;height:100vh}
     .menu{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);
       background:rgba(255,255,255,.95);padding:8px 12px;border-radius:8px;display:grid;
-      grid-auto-flow:column;grid-auto-columns:min-content;gap:12px;max-width:640px;overflow-x:auto;scrollbar-width:none;box-shadow:0 0 6px rgba(0,0,0,.25);z-index:1000}
+      grid-auto-flow:column;grid-auto-columns:min-content;gap:12px;max-width:640px;overflow-x:auto;
+      scrollbar-width:none;box-shadow:0 0 6px rgba(0,0,0,.25);z-index:1000}
     .menu::-webkit-scrollbar{display:none}
     .menu-item{text-align:center;font:12px/1 sans-serif}
     .menu-item button{background:none;border:2px solid transparent;border-radius:6px;padding:2px;margin-bottom:4px;cursor:pointer}
@@ -34,15 +35,12 @@
 
 <script>
 /***********************  CONFIG  *********************************/
-const TYPES=[
-  ['shahed',36],['shaheds',72],['orlan',36],['zala',36],['molniya',36],['lancet',36],
-  ['supercam',36],['kab',72],['rocket',72],['невідомий',36]
-];
+const TYPES=[['shahed',36],['shaheds',72],['orlan',36],['zala',36],['molniya',36],['lancet',36],['supercam',36],['kab',72],['rocket',72],['невідомий',36]];
 const ROT_OFFSET={kab:135,'невідомий':0,default:45};
-const ANIM_MS=6000;          // цикл A→B (ms)
-const SMALL_ARROW=8;         // бігаючі стрілки (px)
-const REPEAT='10%';          // крок між стрілками
-const PROJ_DIST=3000;        // прогнозований сегмент (м)
+const ANIM_MS=6000;           // цикл руху (мс)
+const SMALL_ARROW=8;          // декор-стрілка (px)
+const REPEAT='10%';           // повторюваність декору
+const PROJ_DIST=3000;         // прогноз довжиною 3 км
 /******************************************************************/
 
 let map=null;
@@ -50,9 +48,10 @@ const drones=[];
 let selectedType=null;
 let activeIdx=null;
 
+// ── helpers ─────────────────────────────────────────────────────
 function makeIcon(name,size){return L.icon({iconUrl:`${name}.png`,iconSize:[size,size],iconAnchor:[size/2,size/2]});}
 function bearing(a,b){const φ1=a.lat*Math.PI/180,φ2=b.lat*Math.PI/180,Δλ=(b.lng-a.lng)*Math.PI/180;const y=Math.sin(Δλ)*Math.cos(φ2);const x=Math.cos(φ1)*Math.sin(φ2)-Math.sin(φ1)*Math.cos(φ2)*Math.cos(Δλ);return(Math.atan2(y,x)*180/Math.PI+360)%360;}
-function destPoint(pt,bear,dist){const R=6371000,δ=dist/R,θ=bear*Math.PI/180;const φ1=pt.lat*Math.PI/180,λ1=pt.lng*Math.PI/180;const φ2=Math.asin(Math.sin(φ1)*Math.cos(δ)+Math.cos(φ1)*Math.sin(δ)*Math.cos(θ));const λ2=λ1+Math.atan2(Math.sin(θ)*Math.sin(δ)*Math.cos(φ1),Math.cos(δ)-Math.sin(φ1)*Math.sin(φ2));return L.latLng(φ2*180/Math.PI,(λ2*180/Math.PI+540)%360-180);} // нормалізація довготи
+function destPoint(pt,brg,dist){const R=6371000,δ=dist/R,θ=brg*Math.PI/180;const φ1=pt.lat*Math.PI/180,λ1=pt.lng*Math.PI/180;const φ2=Math.asin(Math.sin(φ1)*Math.cos(δ)+Math.cos(φ1)*Math.sin(δ)*Math.cos(θ));const λ2=λ1+Math.atan2(Math.sin(θ)*Math.sin(δ)*Math.cos(φ1),Math.cos(δ)-Math.sin(φ1)*Math.sin(φ2));return L.latLng(φ2*180/Math.PI,(λ2*180/Math.PI+540)%360-180);} // нормаліз. довготи
 
 /********* Popup helpers *********/
 window.removeDrone=idx=>{const dr=drones[idx];if(!dr)return;cancelAnimationFrame(dr._raf);cancelAnimationFrame(dr._arrowRAF);[dr.marker,dr.shadow,dr.line,dr.decor,dr.proj].forEach(l=>l && map.removeLayer(l));drones[idx]=null;};
@@ -60,18 +59,18 @@ window.setParams=(idx,alt,speed)=>{const dr=drones[idx];if(!dr)return;dr.alt=+al
 
 /***********************  INIT  ***********************************/
 document.addEventListener('DOMContentLoaded',()=>{
+  // 1. карта
   map=L.map('map').setView([49.9,36.3],10);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-    maxZoom:18,
-    attribution:'© OpenStreetMap'
-  }).addTo(map);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© OpenStreetMap'}).addTo(map);
 
+  // 2. меню
   const icons={};
   const menu=document.getElementById('menu');
-  TYPES.forEach(([n,s])=>{icons[n]=makeIcon(n,s);const el=document.createElement('div');el.className='menu-item';el.dataset.type=n;el.innerHTML=`<button><img src="${n}.png"></button><span>${n}</span>`;menu.appendChild(el);});
+  TYPES.forEach(([name,size])=>{icons[name]=makeIcon(name,size);const el=document.createElement('div');el.className='menu-item';el.dataset.type=name;el.innerHTML=`<button><img src="${name}.png"></button><span>${name}</span>`;menu.appendChild(el);});
   menu.addEventListener('click',e=>{const it=e.target.closest('.menu-item');if(!it)return;menu.querySelectorAll('.menu-item').forEach(x=>x.classList.remove('selected'));it.classList.add('selected');selectedType=it.dataset.type;activeIdx=null;});
   menu.addEventListener('wheel',e=>{if(e.deltaY){e.preventDefault();menu.scrollLeft+=e.deltaY;}});
 
+  // 3. клік по карті
   map.on('click',e=>{
     if(activeIdx!==null){const dr=drones[activeIdx];setCourse(dr,dr.marker.getLatLng(),e.latlng);activeIdx=null;return;}
     if(selectedType){addDrone(e.latlng,selectedType,icons[selectedType]);menu.querySelectorAll('.menu-item').forEach(x=>x.classList.remove('selected'));selectedType=null;}
@@ -84,7 +83,6 @@ function addDrone(latlng,type,icon){
   const marker=L.marker(latlng,{icon,draggable:true,rotationOrigin:'center'}).addTo(map);
   const shadow=L.polyline([], {color:'#fff',weight:4,opacity:.5,interactive:false}).addTo(map);
   const line  =L.polyline([], {color:'#000',weight:2,interactive:false}).addTo(map);
-
   const dr={marker,shadow,line,decor:null,proj:null,rotOffset:ROT_OFFSET[type]??ROT_OFFSET.default,path:[latlng],alt:0,speed:0,dragging:false,_raf:0,_arrowRAF:0};
   drones.push(dr);
 
@@ -106,4 +104,9 @@ function setCourse(dr,A,B){
   drawProjection(dr,B,ang);
   startLoop(dr,A,B);
 }
-function drawProjection(dr,startPt,ang){if(dr.proj) map.removeLayer(dr.proj);const endPt=destPoint(startPt
+function drawProjection(dr,startPt,ang){if(dr.proj) map.removeLayer(dr.proj);const endPt=destPoint(startPt,ang,PROJ_DIST);dr.proj=L.polyline([startPt,endPt],{color:'#000',weight:1,dashArray:'6 6',interactive:false}).addTo(map);} 
+
+/***********************  decorations  ***************************/
+function drawArrows(dr){if(dr.decor) map.removeLayer(dr.decor);dr.decor=L.polylineDecorator(dr.line,{interactive:false,patterns:[{offset:'0%',repeat:REPEAT,symbol:L.Symbol.arrowHead({pixelSize:SMALL_ARROW,polygon:false,pathOptions:{stroke:true,color:'#000',weight:2,interactive:false}})}]}).addTo(map);animateArrows(dr);} 
+
+/***********************  animations  ****************************/
