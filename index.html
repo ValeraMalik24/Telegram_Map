@@ -35,20 +35,21 @@
 /***********************  CONFIG  *********************************/
 const TYPES=[['shahed',36],['shaheds',72],['orlan',36],['zala',36],['molniya',36],['lancet',36],['supercam',36],['kab',72],['rocket',72],['невідомий',36]];
 const ROT_OFFSET={kab:135,'невідомий':0,default:45};
-const MAX_POINTS=7;           // маршрутний буфер
-const ANIM_MS=6000;           // цикл переміщення бпла
-const SMALL_ARROW=8;          // розмір «бігаючих» стрілок
-const REPEAT='10%';           // крок між стрілками
+const ANIM_MS=6000;          // цикл переміщення бпла
+const SMALL_ARROW=8;         // розмір «бігаючих» стрілок
+const REPEAT='10%';          // крок між стрілками
+const PROJ_DIST=3000;        // прогнозований маршрут, м
 /******************************************************************/
 
-let map=null;const drones=[];
-const hasRotate=typeof L.rotatedMarker==='function';
+let map=null;const drones=[];const hasRotate=typeof L.rotatedMarker==='function';
 
 function makeIcon(name,size){return L.icon({iconUrl:`${name}.png`,iconSize:[size,size],iconAnchor:[size/2,size/2]});}
 function bearing(a,b){const φ1=a.lat*Math.PI/180,φ2=b.lat*Math.PI/180,Δλ=(b.lng-a.lng)*Math.PI/180;const y=Math.sin(Δλ)*Math.cos(φ2);const x=Math.cos(φ1)*Math.sin(φ2)-Math.sin(φ1)*Math.cos(φ2)*Math.cos(Δλ);return(Math.atan2(y,x)*180/Math.PI+360)%360;}
+function destPoint(pt,bear,dist){const R=6371000;const δ=dist/R;const θ=bear*Math.PI/180;const φ1=pt.lat*Math.PI/180;const λ1=pt.lng*Math.PI/180;const φ2=Math.asin(Math.sin(φ1)*Math.cos(δ)+Math.cos(φ1)*Math.sin(δ)*Math.cos(θ));const λ2=λ1+Math.atan2(Math.sin(θ)*Math.sin(δ)*Math.cos(φ1),Math.cos(δ)-Math.sin(φ1)*Math.sin(φ2));return L.latLng(φ2*180/Math.PI,(λ2*180/Math.PI+540)%360-180);} // нормаліз.
 
-/* Popup helper                         */
-window.removeDrone=idx=>{const dr=drones[idx];if(!dr)return;cancelAnimationFrame(dr._raf);cancelAnimationFrame(dr._arrowRAF);[dr.marker,dr.shadow,dr.line,dr.decor].forEach(l=>l && map.removeLayer(l));drones[idx]=null;};
+/* Popup helpers */
+window.removeDrone=idx=>{const dr=drones[idx];if(!dr)return;cancelAnimationFrame(dr._raf);cancelAnimationFrame(dr._arrowRAF);[dr.marker,dr.shadow,dr.line,dr.decor,dr.proj].forEach(l=>l && map.removeLayer(l));drones[idx]=null;};
+window.setParams=(idx,alt,speed)=>{const dr=drones[idx];if(!dr)return;dr.alt=+alt||0;dr.speed=+speed||0;dr.marker.closePopup();};
 
 /***********************  INIT  ***********************************/
 window.addEventListener('DOMContentLoaded',()=>{
@@ -56,69 +57,37 @@ window.addEventListener('DOMContentLoaded',()=>{
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© OpenStreetMap'}).addTo(map);
 
   /* меню */
-  const icons={};const menu=document.getElementById('menu');let selectedType=null;let activeIdx=null; // активний дрон для прокладання курсу
+  const icons={};const menu=document.getElementById('menu');let selType=null;let activeIdx=null;
   TYPES.forEach(([n,s])=>{icons[n]=makeIcon(n,s);const el=document.createElement('div');el.className='menu-item';el.dataset.type=n;el.innerHTML=`<button><img src="${n}.png"></button><span>${n}</span>`;menu.appendChild(el);});
-  menu.addEventListener('click',e=>{
-      const it=e.target.closest('.menu-item');if(!it)return;
-      menu.querySelectorAll('.menu-item').forEach(x=>x.classList.remove('selected'));
-      it.classList.add('selected');
-      selectedType=it.dataset.type;
-      activeIdx=null; // скидаємо курс-режим
-  });
+  menu.addEventListener('click',e=>{const it=e.target.closest('.menu-item');if(!it)return;menu.querySelectorAll('.menu-item').forEach(x=>x.classList.remove('selected'));it.classList.add('selected');selType=it.dataset.type;activeIdx=null;});
   menu.addEventListener('wheel',e=>{if(e.deltaY){e.preventDefault();menu.scrollLeft+=e.deltaY;}});
 
-  /* додаємо чи малюємо курс */
   map.on('click',e=>{
-    // якщо вибрано дрона для курсу
-    if(activeIdx!==null){
-      const dr=drones[activeIdx];const A=dr.marker.getLatLng();const B=e.latlng;setCourse(dr,A,B);activeIdx=null;return;}
-
-    // якщо є вибраний тип — ставимо нового бпла, а потім автоматично знімаємо вибір
-    if(selectedType&&selectedType in icons){
-      addDrone(e.latlng,selectedType,icons[selectedType]);
-      // зняти вибір у меню
-      menu.querySelectorAll('.menu-item').forEach(x=>x.classList.remove('selected'));
-      selectedType=null;
-    }
+    // Якщо очікуємо кінцеву точку курсу
+    if(activeIdx!==null){const dr=drones[activeIdx];setCourse(dr,dr.marker.getLatLng(),e.latlng);activeIdx=null;return;}
+    // Якщо обрано тип → ставимо новий дрон і знімаємо вибір
+    if(selType&&selType in icons){addDrone(e.latlng,selType,icons[selType]);menu.querySelectorAll('.menu-item').forEach(x=>x.classList.remove('selected'));selType=null;}
   });
 });
 
-/***********************  Додати дрона  ***************************/
-function addDrone(latlng,type,icon){
-  const idx=drones.length;
-  const marker=L.marker(latlng,{icon,draggable:true,rotationOrigin:'center'}).addTo(map);
-  const shadow=L.polyline([],{color:'#fff',weight:4,opacity:.5,interactive:false}).addTo(map);
-  const line=L.polyline([],{color:'#000',weight:2,interactive:false}).addTo(map);
-
-  const dr={marker,shadow,line,decor:null,rotOffset:ROT_OFFSET[type]??ROT_OFFSET.default,path:[latlng],dragging:false,_raf:0,_arrowRAF:0};
-  drones.push(dr);
-
-  marker.on('dragstart',()=>{dr.dragging=true;});
-  marker.on('dragend',()=>{dr.dragging=false;});
-  marker.on('click',ev=>{window.activeIdx=idx;ev.originalEvent.stopPropagation();});
-
-  marker.bindPopup(`<button onclick="removeDrone(${idx})">Видалити</button>`);
+/****************   Додати дрона   *********************************/
+function addDrone(latlng,type,icon){const idx=drones.length;const marker=L.marker(latlng,{icon,draggable:true,rotationOrigin:'center'}).addTo(map);const shadow=L.polyline([], {color:'#fff',weight:4,opacity:.5,interactive:false}).addTo(map);const line=L.polyline([], {color:'#000',weight:2,interactive:false}).addTo(map);
+  const dr={marker,shadow,line,decor:null,proj:null,rotOffset:ROT_OFFSET[type]??ROT_OFFSET.default,path:[latlng],alt:0,speed:0,dragging:false,_raf:0,_arrowRAF:0};drones.push(dr);
+  marker.on('dragstart',()=>dr.dragging=true);
+  marker.on('dragend',()=>{dr.dragging=false;activeIdx=null;});
+  marker.on('click',ev=>{activeIdx=idx;ev.originalEvent.stopPropagation();});
+  marker.bindPopup(`Висота: <input id='alt_${idx}' type='number' value='${dr.alt}' style='width:50px'>м<br>Швидкість: <input id='spd_${idx}' type='number' value='${dr.speed}' style='width:50px'>км/ч<br><button onclick="setParams(${idx},document.getElementById('alt_${idx}').value,document.getElementById('spd_${idx}').value)">OK</button><br><button onclick="removeDrone(${idx})">Видалити</button>`);
 }
 
-/***********************  Функції курсу  ***************************/
-function setCourse(dr,A,B){
-  dr.path=[A,B];
-  dr.shadow.setLatLngs(dr.path);
-  dr.line.setLatLngs(dr.path);
-  const ang=bearing(A,B);
-  if(dr.marker.setRotationAngle)dr.marker.setRotationAngle(ang-dr.rotOffset);
-  drawArrows(dr);
-  startLoop(dr,A,B);
-}
+/****************   Курс, проекція, анімації   *********************/
+function setCourse(dr,A,B){dr.path=[A,B];dr.shadow.setLatLngs(dr.path);dr.line.setLatLngs(dr.path);const ang=bearing(A,B);if(dr.marker.setRotationAngle)dr.marker.setRotationAngle(ang-dr.rotOffset);
+  drawArrows(dr);drawProjection(dr,B,ang);startLoop(dr,A,B);}
 
-function drawArrows(dr){
-  if(dr.decor)map.removeLayer(dr.decor);
-  dr.decor=L.polylineDecorator(dr.line,{interactive:false,patterns:[{offset:'0%',repeat:REPEAT,symbol:L.Symbol.arrowHead({pixelSize:SMALL_ARROW,polygon:false,pathOptions:{stroke:true,color:'#000',weight:2,interactive:false}})}]}).addTo(map);
-  animateArrows(dr);
-}
+function drawArrows(dr){if(dr.decor)map.removeLayer(dr.decor);dr.decor=L.polylineDecorator(dr.line,{interactive:false,patterns:[{offset:'0%',repeat:REPEAT,symbol:L.Symbol.arrowHead({pixelSize:SMALL_ARROW,polygon:false,pathOptions:{stroke:true,color:'#000',weight:2,interactive:false}})}]}).addTo(map);animateArrows(dr);}  
 
-/***********************  Анімація   ******************************/
-function startLoop(dr,A,B){cancelAnimationFrame(dr._raf);const step=ts=>{const t=((ts)%ANIM_MS)/ANIM_MS;const lat=A.lat+(B.lat-A.lat)*t;const lng=A.lng+(B.lng-A.lng)*t;dr.marker.setLatLng([lat,lng]);dr._raf=requestAnimationFrame(step);};dr._raf=requestAnimationFrame(step);}
+function drawProjection(dr,startPt,ang){if(dr.proj)map.removeLayer(dr.proj);const endPt=destPoint(startPt,ang,PROJ_DIST);dr.proj=L.polyline([startPt,endPt],{color:'#000',weight:1,dashArray:'6 6',interactive:false}).addTo(map);} 
+
+function startLoop(dr,A,B){cancelAnimationFrame(dr._raf);const step=ts=>{const t=((ts)%ANIM_MS)/ANIM_MS;const lat=A.lat+(B.lat-A.lat)*t;const lng=A.lng+(B.lng-A.lng)*t;dr.marker.setLatLng([lat,lng]);dr._raf=requestAnimationFrame(step);};dr._raf=requestAnimationFrame(step);} 
 function animateArrows(dr){cancelAnimationFrame(dr._arrowRAF);let off=0;const tick=()=>{off=(off+1)%100;if(dr.decor)dr.decor.setPatterns([{offset:`${off}%`,repeat:REPEAT,symbol:L.Symbol.arrowHead({pixelSize:SMALL_ARROW,polygon:false,pathOptions:{stroke:true,color:'#000',weight:2,interactive:false}})}]);dr._arrowRAF=requestAnimationFrame(tick);};tick();}
 </script>
 </body>
