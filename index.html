@@ -10,43 +10,18 @@
   <!-- Leaflet core -->
   <link rel="stylesheet" href="leaflet.css" />
   <script src="leaflet.js"></script>
-
-  <!-- Плагін обертання маркерів (add setRotationAngle до L.Marker) -->
+  <!-- Плагін обертання маркерів -->
   <script src="https://cdn.jsdelivr.net/npm/leaflet-rotatedmarker@0.2.0/leaflet.rotatedMarker.js"></script>
 
   <style>
     html, body { margin: 0; padding: 0; }
     #map { height: 100vh; width: 100vw; }
 
-    /* === Горизонтальне меню (Grid + скрол) === */
-    .menu {
-      position: absolute;
-      bottom: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(255, 255, 255, 0.95);
-      padding: 8px 12px;
-      border-radius: 8px;
-      display: grid;
-      grid-auto-flow: column;
-      grid-auto-columns: min-content;
-      gap: 12px;
-      max-width: 640px;
-      overflow-x: auto;
-      scrollbar-width: none;           /* Firefox */
-      -ms-overflow-style: none;        /* IE */
-      box-shadow: 0 0 6px rgba(0,0,0,.25);
-      z-index: 1000;
-    }
-    .menu::-webkit-scrollbar{display:none} /* Chrome */
-
-    /* Правий градієнт-підказка */
-    .menu::after{
-      content:"";position:absolute;top:0;right:0;width:32px;height:100%;pointer-events:none;
-      background:linear-gradient(to right,rgba(255,255,255,0),rgba(0,0,0,.15));
-    }
-
-    .menu-item{font-family:sans-serif;font-size:12px;text-align:center}
+    /* === Меню (Grid + скрол) === */
+    .menu{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);background:rgba(255,255,255,.95);padding:8px 12px;border-radius:8px;display:grid;grid-auto-flow:column;grid-auto-columns:min-content;gap:12px;max-width:640px;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none;box-shadow:0 0 6px rgba(0,0,0,.25);z-index:1000}
+    .menu::-webkit-scrollbar{display:none}
+    .menu::after{content:"";position:absolute;top:0;right:0;width:32px;height:100%;pointer-events:none;background:linear-gradient(to right,rgba(255,255,255,0),rgba(0,0,0,.15))}
+    .menu-item{text-align:center;font-family:sans-serif;font-size:12px}
     .menu-item button{background:none;border:2px solid transparent;border-radius:6px;padding:2px;cursor:pointer;margin-bottom:4px}
     .menu-item.selected button{border-color:#007bff;box-shadow:0 0 4px #007bff}
     .menu-item img{width:36px;height:36px;border-radius:4px}
@@ -55,9 +30,10 @@
 <body>
 <div id="map"></div>
 
-<!-- Меню вибору типу цілей -->
+<!-- === Меню цілей === -->
 <div class="menu" id="menu">
   <div class="menu-item" data-type="shahed"><button><img src="shahed.png"></button><span>Shahed</span></div>
+  <div class="menu-item" data-type="shaheds"><button><img src="shaheds.png"></button><span>Shaheds</span></div>
   <div class="menu-item" data-type="orlan"><button><img src="orlan.png"></button><span>Orlan</span></div>
   <div class="menu-item" data-type="zala"><button><img src="zala.png"></button><span>Zala</span></div>
   <div class="menu-item" data-type="molniya"><button><img src="molniya.png"></button><span>Molniya</span></div>
@@ -69,118 +45,94 @@
 </div>
 
 <script>
-/***********************************
- * 1. Карта та базові змінні        *
- ***********************************/
-const map = L.map('map').setView([49.9, 36.3], 10);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 18,
-  attribution: '&copy; OpenStreetMap contributors'
-}).addTo(map);
+/*************** 1. Карта ***************/
+const map=L.map('map').setView([49.9,36.3],10);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
 
-const icons = {
-  shahed:   L.icon({iconUrl:'shahed.png',  iconSize:[36,36]}),
-  orlan:    L.icon({iconUrl:'orlan.png',   iconSize:[36,36]}),
-  zala:     L.icon({iconUrl:'zala.png',    iconSize:[36,36]}),
-  molniya:  L.icon({iconUrl:'molniya.png', iconSize:[36,36]}),
-  lancet:   L.icon({iconUrl:'lancet.png',  iconSize:[36,36]}),
-  supercam: L.icon({iconUrl:'supercam.png',iconSize:[36,36]}),
-  kab:      L.icon({iconUrl:'kab.png',     iconSize:[36,36]}),
-  rocket:   L.icon({iconUrl:'rocket.png',  iconSize:[36,36]}),
-  "невідомий": L.icon({iconUrl:'невідомий.png',iconSize:[36,36]})
+/*************** 2. Іконки ***************/
+const icons={
+  shahed:  L.icon({iconUrl:'shahed.png',  iconSize:[36,36]}),
+  shaheds: L.icon({iconUrl:'shaheds.png', iconSize:[36,36]}),
+  orlan:   L.icon({iconUrl:'orlan.png',   iconSize:[36,36]}),
+  zala:    L.icon({iconUrl:'zala.png',    iconSize:[36,36]}),
+  molniya: L.icon({iconUrl:'molniya.png', iconSize:[36,36]}),
+  lancet:  L.icon({iconUrl:'lancet.png',  iconSize:[36,36]}),
+  supercam:L.icon({iconUrl:'supercam.png',iconSize:[36,36]}),
+  kab:     L.icon({iconUrl:'kab.png',     iconSize:[36,36]}),
+  rocket:  L.icon({iconUrl:'rocket.png',  iconSize:[36,36]}),
+  "невідомий":L.icon({iconUrl:'невідомий.png',iconSize:[36,36]})
 };
 
-let selectedType = null;             // який тип зараз у меню
-const drones = [];                   // масив усіх цілей
-const MAX_TAIL_POINTS = 6;           // 1 старт + 5 останніх точок (5 сегментів)
+/*************** 3. Орієнтаційні offset-и ***************/
+// кут, який треба відняти від заголовка, щоб «ніс» іконки дивився у потрібний бік
+const rotationOffsetByType={
+  "невідомий":0,
+  kab:135,            // ніс униз-праворуч (SE)
+  default:45          // більшість іконок має ніс угорі-праворуч (NE)
+};
 
-/***********************************
- * 2. Меню вибору типу              *
- ***********************************/
-const menu = document.getElementById('menu');
-menu.addEventListener('click', e=>{
-  const item = e.target.closest('.menu-item');
+/*************** 4. Стан ***************/
+let selectedType=null;
+const drones=[];
+const MAX_TAIL_POINTS=6;
+
+/*************** 5. Меню ***************/
+const menu=document.getElementById('menu');
+menu.addEventListener('click',e=>{
+  const item=e.target.closest('.menu-item');
   if(!item) return;
   document.querySelectorAll('.menu-item').forEach(el=>el.classList.remove('selected'));
   item.classList.add('selected');
-  selectedType = item.dataset.type;
+  selectedType=item.dataset.type;
 });
-// горизонтальний скрол коліщатком
-menu.addEventListener('wheel', e=>{
-  if(e.deltaY===0) return;
-  e.preventDefault();
-  menu.scrollLeft += e.deltaY;
-});
+menu.addEventListener('wheel',e=>{if(e.deltaY!==0){e.preventDefault();menu.scrollLeft+=e.deltaY;}});
 
-/***********************************
- * 3. Допоміжні функції             *
- ***********************************/
-// Повертає координату на distKm км уперед під кутом brng (градусів)
-function destinationPoint(lat, lon, brng, distKm){
-  const R = 6371, d = distKm/R, b = brng*Math.PI/180;
-  const lat1 = lat*Math.PI/180, lon1 = lon*Math.PI/180;
-  const lat2 = Math.asin(Math.sin(lat1)*Math.cos(d)+Math.cos(lat1)*Math.sin(d)*Math.cos(b));
-  const lon2 = lon1 + Math.atan2(Math.sin(b)*Math.sin(d)*Math.cos(lat1), Math.cos(d)-Math.sin(lat1)*Math.sin(lat2));
-  return [lat2*180/Math.PI, lon2*180/Math.PI];
+/*************** 6. Гео-допоміжні ***************/
+function destinationPoint(lat,lon,brng,distKm){
+  const R=6371,d=distKm/R,b=brng*Math.PI/180;
+  const lat1=lat*Math.PI/180,lon1=lon*Math.PI/180;
+  const lat2=Math.asin(Math.sin(lat1)*Math.cos(d)+Math.cos(lat1)*Math.sin(d)*Math.cos(b));
+  const lon2=lon1+Math.atan2(Math.sin(b)*Math.sin(d)*Math.cos(lat1),Math.cos(d)-Math.sin(lat1)*Math.sin(lat2));
+  return[lat2*180/Math.PI,lon2*180/Math.PI];
 }
 
-// Малює / перемальовує червону стрілку курсу
 function drawHeadingArrow(drone){
   if(drone.headingArrow) map.removeLayer(drone.headingArrow);
   if(drone.heading===undefined) return;
-  const from = drone.marker.getLatLng();
-  const to = destinationPoint(from.lat, from.lng, drone.heading, 2); // 2 км
-  drone.headingArrow = L.polyline([from, to], {color:'red',weight:4,dashArray:'6,4'}).addTo(map);
+  const from=drone.marker.getLatLng();
+  const to=destinationPoint(from.lat,from.lng,drone.heading,2);
+  drone.headingArrow=L.polyline([from,to],{color:'red',weight:4,dashArray:'6,4'}).addTo(map);
 }
 
-// Плавне «переліт» маркера із dragstart у dragend
 function animateMarker(marker,start,end,dur=500,cb){
-  const sLat=start.lat, sLng=start.lng, dLat=end.lat-sLat, dLng=end.lng-sLng;
-  let t0=null;
-  function step(ts){
-    if(!t0) t0=ts;
-    const p=Math.min((ts-t0)/dur,1);
-    marker.setLatLng([sLat+dLat*p, sLng+dLng*p]);
-    if(p<1) requestAnimationFrame(step); else cb&&cb();
-  }
-  marker.setLatLng(start);
-  requestAnimationFrame(step);
+  const dLat=end.lat-start.lat,dLng=end.lng-start.lng;let t0=null;
+  function step(ts){if(!t0) t0=ts;const p=Math.min((ts-t0)/dur,1);marker.setLatLng([start.lat+dLat*p,start.lng+dLng*p]);p<1?requestAnimationFrame(step):cb&&cb();}
+  marker.setLatLng(start);requestAnimationFrame(step);
 }
 
-// Застосувати курс із попапу
 function applyHeading(idx){
-  const inp=document.getElementById(`headingInput_${idx}`);
-  if(!inp) return;
-  const val=parseFloat(inp.value);
-  if(isNaN(val)) return;
-  const d=drones[idx];
-  if(!d) return;
+  const inp=document.getElementById(`headingInput_${idx}`);if(!inp) return;
+  const val=parseFloat(inp.value);if(isNaN(val)) return;
+  const d=drones[idx];if(!d) return;
   d.heading=val;
-  d.marker.setRotationAngle(val - d.rotationOffset);
+  d.marker.setRotationAngle(val-d.rotationOffset);
   drawHeadingArrow(d);
   d.marker.closePopup();
 }
 
-/***********************************
- * 4. Додавання цілі на мапу        *
- ***********************************/
-map.on('click', e=>{
-  if(!selectedType || !(selectedType in icons)) return;
-  const rotOff = selectedType==="невідомий"? 0 : 45;
+/*************** 7. Додавання цілі ***************/
+map.on('click',e=>{
+  if(!selectedType||!(selectedType in icons)) return;
+  const rotOff=rotationOffsetByType[selectedType] ?? rotationOffsetByType.default;
 
-  // маркер
   const marker=L.marker(e.latlng,{icon:icons[selectedType],draggable:true,rotationAngle:0,rotationOrigin:'center center'}).addTo(map);
-
-  // поліліни: біла тінь + чорний шлях
   const shadow=L.polyline([e.latlng],{color:'#fff',weight:8,opacity:.6}).addTo(map);
-  const line  =L.polyline([e.latlng],{color:'#000',weight:4,opacity:1}).addTo(map);
+  const line=L.polyline([e.latlng],{color:'#000',weight:4,opacity:1}).addTo(map);
 
-  // обʼєкт дрона
   const idx=drones.length;
   const drone={marker,shadow,line,headingArrow:null,coords:[e.latlng],rotationOffset:rotOff,heading:undefined};
   drones.push(drone);
 
-  // drag логіка
   let dragStart;
   marker.on('dragstart',()=>{dragStart=marker.getLatLng();});
   marker.on('dragend',()=>{
@@ -190,29 +142,23 @@ map.on('click', e=>{
       while(drone.coords.length>MAX_TAIL_POINTS) drone.coords.shift();
       shadow.setLatLngs(drone.coords);
       line.setLatLngs(drone.coords);
-      drawHeadingArrow(drone); // перенамалювати стрілку від нової точки
+      drawHeadingArrow(drone);
     });
   });
 
-  // попап із полем курсу
   const popup=L.popup().setContent(`
     <b>${selectedType.toUpperCase()}</b><br>
-    Курс (0–359°): <input id="headingInput_${idx}" type="number" min="0" max="359" value="0" style="width:60px;"/><br>
+    Курс (0–359°): <input id="headingInput_${idx}" type="number" min="0" max="359" value="0" style="width:60px;"><br>
     <button onclick="applyHeading(${idx})">OK</button>
     <button onclick="removeDrone(${idx})">Видалити</button>
   `);
   marker.bindPopup(popup).openPopup();
 });
 
-/***********************************
- * 5. Видалення цілі                *
- ***********************************/
+/*************** 8. Видалення ***************/
 function removeDrone(idx){
-  const d=drones[idx];
-  if(!d) return;
-  map.removeLayer(d.marker);
-  map.removeLayer(d.shadow);
-  map.removeLayer(d.line);
+  const d=drones[idx];if(!d) return;
+  map.removeLayer(d.marker);map.removeLayer(d.shadow);map.removeLayer(d.line);
   if(d.headingArrow) map.removeLayer(d.headingArrow);
   drones[idx]=null;
 }
