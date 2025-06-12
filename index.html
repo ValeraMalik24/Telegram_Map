@@ -2,7 +2,7 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8" />
-  <title>SKY KHARKIV MAP📡</title>
+  <title>Троянда ІНФО📡</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" href="favicon.png" />
 
@@ -58,7 +58,13 @@ window.addEventListener('DOMContentLoaded',()=>{
   /* меню */
   const icons={};const menu=document.getElementById('menu');let selectedType=null;let activeIdx=null; // активний дрон для прокладання курсу
   TYPES.forEach(([n,s])=>{icons[n]=makeIcon(n,s);const el=document.createElement('div');el.className='menu-item';el.dataset.type=n;el.innerHTML=`<button><img src="${n}.png"></button><span>${n}</span>`;menu.appendChild(el);});
-  menu.addEventListener('click',e=>{const it=e.target.closest('.menu-item');if(!it)return;menu.querySelectorAll('.menu-item').forEach(x=>x.classList.remove('selected'));it.classList.add('selected');selectedType=it.dataset.type;activeIdx=null;});
+  menu.addEventListener('click',e=>{
+      const it=e.target.closest('.menu-item');if(!it)return;
+      menu.querySelectorAll('.menu-item').forEach(x=>x.classList.remove('selected'));
+      it.classList.add('selected');
+      selectedType=it.dataset.type;
+      activeIdx=null; // скидаємо курс-режим
+  });
   menu.addEventListener('wheel',e=>{if(e.deltaY){e.preventDefault();menu.scrollLeft+=e.deltaY;}});
 
   /* додаємо чи малюємо курс */
@@ -67,37 +73,40 @@ window.addEventListener('DOMContentLoaded',()=>{
     if(activeIdx!==null){
       const dr=drones[activeIdx];const A=dr.marker.getLatLng();const B=e.latlng;setCourse(dr,A,B);activeIdx=null;return;}
 
-    // якщо є вибраний тип — ставимо нового бпла
-    if(!selectedType||!(selectedType in icons))return;
-    const idx=drones.length;
-    const marker=L.marker(e.latlng,{icon:icons[selectedType],draggable:true,rotationOrigin:'center'}).addTo(map);
-    const shadow=L.polyline([],{color:'#fff',weight:4,opacity:.5,interactive:false}).addTo(map);
-    const line=L.polyline([],{color:'#000',weight:2,interactive:false}).addTo(map);
-
-    const dr={marker,shadow,line,decor:null,rotOffset:ROT_OFFSET[selectedType]??ROT_OFFSET.default,path:[e.latlng],dragging:false,_raf:0,_arrowRAF:0};
-    drones.push(dr);
-
-    marker.on('dragstart',()=>dr.dragging=true);
-    marker.on('dragend',()=>{dr.dragging=false;activeIdx=null;});
-
-    // клік по маркеру → вибираємо його для побудови курсу
-    marker.on('click',ev=>{activeIdx=idx;ev.originalEvent.stopPropagation();});
-
-    // popup тільки для видалення
-    marker.bindPopup(`<button onclick="removeDrone(${idx})">Видалити</button>`);
+    // якщо є вибраний тип — ставимо нового бпла, а потім автоматично знімаємо вибір
+    if(selectedType&&selectedType in icons){
+      addDrone(e.latlng,selectedType,icons[selectedType]);
+      // зняти вибір у меню
+      menu.querySelectorAll('.menu-item').forEach(x=>x.classList.remove('selected'));
+      selectedType=null;
+    }
   });
 });
 
+/***********************  Додати дрона  ***************************/
+function addDrone(latlng,type,icon){
+  const idx=drones.length;
+  const marker=L.marker(latlng,{icon,draggable:true,rotationOrigin:'center'}).addTo(map);
+  const shadow=L.polyline([],{color:'#fff',weight:4,opacity:.5,interactive:false}).addTo(map);
+  const line=L.polyline([],{color:'#000',weight:2,interactive:false}).addTo(map);
+
+  const dr={marker,shadow,line,decor:null,rotOffset:ROT_OFFSET[type]??ROT_OFFSET.default,path:[latlng],dragging:false,_raf:0,_arrowRAF:0};
+  drones.push(dr);
+
+  marker.on('dragstart',()=>{dr.dragging=true;});
+  marker.on('dragend',()=>{dr.dragging=false;});
+  marker.on('click',ev=>{window.activeIdx=idx;ev.originalEvent.stopPropagation();});
+
+  marker.bindPopup(`<button onclick="removeDrone(${idx})">Видалити</button>`);
+}
+
 /***********************  Функції курсу  ***************************/
 function setCourse(dr,A,B){
-  // оновити шлях
-  dr.path=[A,B]; // ми тримаємо тільки 2 точки для чіткого A->B
+  dr.path=[A,B];
   dr.shadow.setLatLngs(dr.path);
   dr.line.setLatLngs(dr.path);
-
   const ang=bearing(A,B);
   if(dr.marker.setRotationAngle)dr.marker.setRotationAngle(ang-dr.rotOffset);
-
   drawArrows(dr);
   startLoop(dr,A,B);
 }
