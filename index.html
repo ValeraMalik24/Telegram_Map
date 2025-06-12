@@ -152,13 +152,13 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 }).addTo(map);
 
 const icons = {
-  shahed:   L.icon({ iconUrl: 'shahed.png', iconSize: [32, 32] }),
-  orlan:    L.icon({ iconUrl: 'orlan.png', iconSize: [32, 32] }),
-  zala:     L.icon({ iconUrl: 'zala.png', iconSize: [32, 32] }),
-  molniya:  L.icon({ iconUrl: 'molniya.png', iconSize: [32, 32] }),
-  lancet:   L.icon({ iconUrl: 'lancet.png', iconSize: [32, 32] }),
-  supercam: L.icon({ iconUrl: 'supercam.png', iconSize: [32, 32] }),
-  nevdomiy: L.icon({ iconUrl: 'невідомий.png', iconSize: [32, 32] })
+  shahed:   L.icon({ iconUrl: 'shahed.png', iconSize: [36, 36] }),
+  orlan:    L.icon({ iconUrl: 'orlan.png', iconSize: [36, 36] }),
+  zala:     L.icon({ iconUrl: 'zala.png', iconSize: [36, 36] }),
+  molniya:  L.icon({ iconUrl: 'molniya.png', iconSize: [36, 36] }),
+  lancet:   L.icon({ iconUrl: 'lancet.png', iconSize: [36, 36] }),
+  supercam: L.icon({ iconUrl: 'supercam.png', iconSize: [36, 36] }),
+  невідомий: L.icon({ iconUrl: 'невідомий.png', iconSize: [36, 36] })
 };
 
 let selectedType = null;
@@ -172,30 +172,31 @@ document.getElementById('menu').addEventListener('click', (e) => {
   selectedType = item.dataset.type;
 });
 
-function destinationPoint(lat, lon, brng, distKm) {
-  const R = 6371, d = distKm / R, b = brng * Math.PI / 180;
-  const lat1 = lat * Math.PI / 180, lon1 = lon * Math.PI / 180;
-  const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(b));
-  const lon2 = lon1 + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(lat1), Math.cos(d) - Math.sin(lat1) * Math.sin(lat2));
-  return [lat2 * 180 / Math.PI, lon2 * 180 / Math.PI];
-}
-
 map.on('click', e => {
   if (!selectedType || !icons[selectedType]) return;
 
-  const icon = icons[selectedType];
   const marker = L.rotatedMarker(e.latlng, {
-    icon: icon,
+    icon: icons[selectedType],
     draggable: true,
     rotationAngle: 0,
     rotationOrigin: 'center center'
   }).addTo(map);
 
   const index = drones.length;
-  const drone = { marker, path: [], arrow: null, heading: 0, lastPos: e.latlng };
+  const drone = {
+    marker,
+    path: [],
+    arrow: null,
+    heading: 0,
+    lastPos: e.latlng,
+    type: selectedType
+  };
   drones.push(drone);
 
-  marker.on('dragstart', () => drone.lastPos = marker.getLatLng());
+  marker.on('dragstart', () => {
+    drone.lastPos = marker.getLatLng();
+  });
+
   marker.on('dragend', () => {
     const newPos = marker.getLatLng();
     drone.path.push(L.polyline([drone.lastPos, newPos], { color: 'blue' }).addTo(map));
@@ -205,12 +206,13 @@ map.on('click', e => {
 
   const popup = L.popup().setContent(`
     <b>${selectedType.toUpperCase()}</b><br>
-    Курс (0–359°): <input id="headingInput${index}" type="number" min="0" max="359" style="width: 60px;" value="0" /><br>
+    Курс (0–359°): <input id="headingInput" type="number" min="0" max="359" style="width: 60px;" value="0" /><br>
     <button onclick="updateHeadingFromPopup(${index})">OK</button>
     <button onclick="removeDrone(${index})">Видалити</button>
   `);
 
   marker.bindPopup(popup).openPopup();
+});
 });
 
 function updateHeadingFromPopup(index) {
