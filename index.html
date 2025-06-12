@@ -50,64 +50,11 @@
       height: 36px;
       border-radius: 4px;
     }
-
-    .auth-modal {
-      position: fixed;
-      top: 0; left: 0;
-      width: 100vw; height: 100vh;
-      background: rgba(0,0,0,0.75);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 2000;
-    }
-
-    .auth-content {
-      background: white;
-      padding: 20px;
-      border-radius: 10px;
-      text-align: center;
-      box-shadow: 0 0 10px black;
-    }
-
-    .auth-logo {
-      width: 100px;
-      margin-bottom: 10px;
-    }
-
-    .auth-content input {
-      padding: 6px 10px;
-      margin: 10px 0;
-      width: 140px;
-    }
-
-    .auth-content button {
-      padding: 6px 14px;
-      background: #007bff;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-    }
   </style>
 </head>
 <body>
-
-<!-- Авторизація -->
-<div id="authModal" class="auth-modal">
-  <div class="auth-content">
-    <img src="logo.png" alt="Logo" class="auth-logo" />
-    <h2>Вхід до системи</h2>
-    <input type="password" id="authPassword" placeholder="Введіть пароль" />
-    <br />
-    <button onclick="checkPassword()">Увійти</button>
-  </div>
-</div>
-
-<!-- Мапа -->
 <div id="map"></div>
 
-<!-- Меню -->
 <div class="menu" id="menu">
   <div class="menu-item" data-type="shahed">
     <button><img src="shahed.png" /></button><span>Shahed</span>
@@ -132,7 +79,6 @@
   </div>
 </div>
 
-<!-- JS -->
 <script src="leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/bbecquet/Leaflet.RotatedMarker/leaflet.rotatedMarker.js"></script>
 <script>
@@ -143,13 +89,13 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 }).addTo(map);
 
 const icons = {
-  shahed:   L.icon({ iconUrl: 'shahed.png', iconSize: [34, 34] }),
+  shahed:   L.icon({ iconUrl: 'shahed.png', iconSize: [36, 36] }),
   orlan:    L.icon({ iconUrl: 'orlan.png', iconSize: [36, 36] }),
   zala:     L.icon({ iconUrl: 'zala.png', iconSize: [36, 36] }),
   molniya:  L.icon({ iconUrl: 'molniya.png', iconSize: [36, 36] }),
   lancet:   L.icon({ iconUrl: 'lancet.png', iconSize: [36, 36] }),
   supercam: L.icon({ iconUrl: 'supercam.png', iconSize: [36, 36] }),
-  невідомий: L.icon({ iconUrl: 'невідомий.png', iconSize: [36, 36] })
+  "невідомий": L.icon({ iconUrl: 'невідомий.png', iconSize: [36, 36] })
 };
 
 let selectedType = null;
@@ -215,7 +161,6 @@ function updateHeadingFromPopup(index) {
   updateHeading(drone);
   drone.marker.closePopup();
 }
-}
 
 function updateHeading(drone) {
   if (drone.arrow) map.removeLayer(drone.arrow);
@@ -235,15 +180,6 @@ function removeDrone(index) {
   if (drone.arrow) map.removeLayer(drone.arrow);
   drone.path.forEach(line => map.removeLayer(line));
   drones[index] = null;
-}
-
-function checkPassword() {
-  const input = document.getElementById("authPassword").value;
-  if (input === "4202") {
-    document.getElementById("authModal").style.display = "none";
-  } else {
-    alert("Невірний пароль");
-  }
 }
 </script>
 </body>
