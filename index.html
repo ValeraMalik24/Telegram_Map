@@ -10,8 +10,9 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha512-sA+e4wCX2n7bg0WxZmf0RduCMsZ/HXXIQK5vCk1vZ1tcHTTX3e8DqRL3OjaxAg/P070pPQtO9T0wZPVSBBi4og==" crossorigin=""/>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha512-o8f+aa4Ihiikpjz2uVH54camzato3trENcGukdxbYlR5c+EMF4iAfDdc0pJi/7luWGINuDsrW++PK5+Gos4qQw==" crossorigin=""></script>
 
-  <!-- Plugins (same CDN, avoid CORB) -->
+  <!-- Plugins -->
   <script src="https://unpkg.com/leaflet-rotatedmarker@0.2.0/leaflet.rotatedMarker.js" crossorigin=""></script>
+  <!-- correct filename: leaflet.polylineDecorator.min.js (capital D) -->
   <script src="https://unpkg.com/leaflet-polylinedecorator@1.7.0/dist/leaflet.polylineDecorator.min.js" crossorigin=""></script>
 
   <style>
@@ -99,15 +100,10 @@ function setCourse(dr,A,B){
   dr.path=[A,B];
   dr.shadow.setLatLngs(dr.path);
   dr.line.setLatLngs(dr.path);
-
   const ang=bearing(A,B);
   if(dr.marker.setRotationAngle)dr.marker.setRotationAngle(ang-dr.rotOffset);
-
   drawArrows(dr);
   drawProjection(dr,B,ang);
   startLoop(dr,A,B);
 }
-function drawProjection(dr,startPt,ang){if(dr.proj) map.removeLayer(dr.proj);const endPt=destPoint(startPt,ang,PROJ_DIST);dr.proj=L.polyline([startPt,endPt],{color:'#000',weight:1,dashArray:'6 6',interactive:false}).addTo(map);} 
-
-/***********************  decorations  ***************************/
-function drawArrows(dr){if(dr.decor) map.removeLayer(dr.decor);dr.decor=L.timeline?null:null;dr.decor=L.polylineDecorator(dr.line,{interactive:false,patterns:[{offset:'0%',repeat:REPEAT,symbol:L.Symbol.arrowHead({pixelSize:SMALL_ARROW,polygon:false,pathOptions:{stroke
+function drawProjection(dr,startPt,ang){if(dr.proj) map.removeLayer(dr.proj);const endPt=destPoint(startPt
