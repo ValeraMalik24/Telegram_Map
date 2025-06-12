@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="leaflet.css" />
   <script src="leaflet.js"></script>
 
-  <!-- Плагін обертання маркерів (додає setRotationAngle/Origin до L.Marker) -->
+  <!-- Плагін обертання маркерів -->
   <script src="https://cdn.jsdelivr.net/npm/leaflet-rotatedmarker@0.2.0/leaflet.rotatedMarker.js"></script>
 
   <style>
@@ -88,14 +88,14 @@
 </div>
 
 <script>
-// 1. Ініціалізація карти
+// === 1. Ініціалізація карти ===
 const map = L.map('map').setView([49.9, 36.3], 10);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 18,
   attribution: '&copy; OpenStreetMap contributors'
 }).addTo(map);
 
-// 2. Конфігурація іконок
+// === 2. Іконки ===
 const icons = {
   shahed:   L.icon({ iconUrl: 'shahed.png',   iconSize: [36, 36] }),
   orlan:    L.icon({ iconUrl: 'orlan.png',    iconSize: [36, 36] }),
@@ -106,22 +106,20 @@ const icons = {
   "невідомий": L.icon({ iconUrl: 'невідомий.png', iconSize: [36, 36] })
 };
 
-// 3. Змінні стану
+// === 3. Змінні ===
 let selectedType = null;
 const drones = [];
 
-// 4. Вибір типу БпЛА у меню
-const menu = document.getElementById('menu');
-menu.addEventListener('click', (e) => {
+// === 4. Меню вибору типу ===
+document.getElementById('menu').addEventListener('click', (e) => {
   const item = e.target.closest('.menu-item');
   if (!item) return;
-  // візуальне виділення
   document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('selected'));
   item.classList.add('selected');
   selectedType = item.dataset.type;
 });
 
-// 5. Обчислення точки за курсом/дистанцією (для стрілки прогнозу)
+// === 5. Функція обчислення точки призначення ===
 function destinationPoint(lat, lon, brng, distKm) {
   const R = 6371, d = distKm / R, b = brng * Math.PI / 180;
   const lat1 = lat * Math.PI / 180, lon1 = lon * Math.PI / 180;
@@ -130,15 +128,13 @@ function destinationPoint(lat, lon, brng, distKm) {
   return [lat2 * 180 / Math.PI, lon2 * 180 / Math.PI];
 }
 
-// 6. Додавання БпЛА по кліку
+// === 6. Додавання БпЛА ===
 map.on('click', e => {
   if (!selectedType || !(selectedType in icons)) return;
 
-  // "невідомий" малюємо рівно, інші — з 45° зміщенням, аби вирівняти зображення
   const rotationOffset = selectedType === "невідомий" ? 0 : 45;
 
-  // --- ГОЛОВНЕ ВИПРАВЛЕННЯ ---
-  // Використовуємо L.marker замість неіснуючого L.rotatedMarker
+  // Маркер
   const marker = L.marker(e.latlng, {
     icon: icons[selectedType],
     draggable: true,
@@ -146,20 +142,36 @@ map.on('click', e => {
     rotationOrigin: 'center center'
   }).addTo(map);
 
+  // Дві поліліни: тінь + основа
+  const shadow = L.polyline([e.latlng], {
+    color: '#ffffff',        // світла підложка
+    weight: 8,
+    opacity: 0.6
+  }).addTo(map);
+
+  const line = L.polyline([e.latlng], {
+    color: '#000000',        // чорна тонка лінія
+    weight: 4,
+    opacity: 1
+  }).addTo(map);
+
+  // Обʼєкт дрона
   const index = drones.length;
-  const drone = { marker, path: [], arrow: null, heading: 0, lastPos: e.latlng, offset: rotationOffset };
+  const drone = { marker, shadow, line, arrow: null, heading: 0, offset: rotationOffset };
   drones.push(drone);
 
+  // === Drag ===
   marker.on('dragstart', () => drone.lastPos = marker.getLatLng());
 
   marker.on('dragend', () => {
     const newPos = marker.getLatLng();
-    drone.path.push(L.polyline([drone.lastPos, newPos], { color: 'blue' }).addTo(map));
-    drone.lastPos = newPos;
+    // додаємо точку в обидві лінії
+    drone.shadow.addLatLng(newPos);
+    drone.line.addLatLng(newPos);
     updateHeading(drone);
   });
 
-  // спливаюче вікно для введення кута
+  // === Popup ===
   const popup = L.popup().setContent(`
     <b>${selectedType.toUpperCase()}</b><br>
     Курс (0–359°): <input id="headingInput_${index}" type="number" min="0" max="359" style="width: 60px;" value="0" /><br>
@@ -170,7 +182,7 @@ map.on('click', e => {
   marker.bindPopup(popup).openPopup();
 });
 
-// 7. Оновлення напрямку з попапу
+// === 7. Оновлення курсу ===
 function updateHeadingFromPopup(index) {
   const input = document.getElementById(`headingInput_${index}`);
   if (!input) return;
@@ -184,11 +196,10 @@ function updateHeadingFromPopup(index) {
   drone.marker.closePopup();
 }
 
-// 8. Малювання червоної стрілки прогнозу
 function updateHeading(drone) {
   if (drone.arrow) map.removeLayer(drone.arrow);
   const from = drone.marker.getLatLng();
-  const to = destinationPoint(from.lat, from.lng, drone.heading, 2); // 2 км
+  const to = destinationPoint(from.lat, from.lng, drone.heading, 2);
   drone.arrow = L.polyline([from, to], {
     color: 'red',
     weight: 4,
@@ -196,13 +207,14 @@ function updateHeading(drone) {
   }).addTo(map);
 }
 
-// 9. Видалення БпЛА
+// === 8. Видалення БпЛА ===
 function removeDrone(index) {
   const drone = drones[index];
   if (!drone) return;
   map.removeLayer(drone.marker);
   if (drone.arrow) map.removeLayer(drone.arrow);
-  drone.path.forEach(line => map.removeLayer(line));
+  map.removeLayer(drone.line);
+  map.removeLayer(drone.shadow);
   drones[index] = null;
 }
 </script>
