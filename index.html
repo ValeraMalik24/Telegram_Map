@@ -16,7 +16,6 @@
   <link rel="stylesheet" href="style.css" />
 
   <style>
-    /* Если в style.css нет этих правил, оставьте их здесь */
     html, body { margin:0; padding:0; }
     #map { width:100vw; height:100vh; }
 
@@ -104,7 +103,7 @@
 
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <!-- Плагин для повёрнутых маркеров -->
+  <!-- Плагин rotatedMarker -->
   <script src="https://cdn.jsdelivr.net/npm/leaflet-rotatedmarker@0.2.0/leaflet.rotatedMarker.js"></script>
 
   <script>
@@ -116,7 +115,7 @@
         attribution: '&copy; OpenStreetMap contributors'
       }).addTo(map);
 
-      // 2. Создание иконок
+      // 2. Создаём иконки
       function makeIcon(url, size) {
         return L.icon({
           iconUrl: url,
@@ -156,15 +155,15 @@
         }
       });
 
-      // 4. Утилиты
+      // 4. Гео-утилиты
       function bearing(a, b) {
-        const φ1 = a.lat * Math.PI/180;
-        const φ2 = b.lat * Math.PI/180;
-        const Δλ = (b.lng - a.lng) * Math.PI/180;
+        const φ1 = a.lat * Math.PI/180,
+              φ2 = b.lat * Math.PI/180,
+              Δλ = (b.lng - a.lng) * Math.PI/180;
         const y = Math.sin(Δλ) * Math.cos(φ2);
         const x = Math.cos(φ1)*Math.sin(φ2)
                 - Math.sin(φ1)*Math.cos(φ2)*Math.cos(Δλ);
-        return (Math.atan2(y,x)*180/Math.PI + 360) % 360;
+        return (Math.atan2(y, x) * 180/Math.PI + 360) % 360;
       }
 
       // 5. Анимация
@@ -179,10 +178,10 @@
             return;
           }
           const phase = (ts % LOOP_MS)/LOOP_MS;
-          const p = 0.5 - 0.5 * Math.cos(2*Math.PI*phase);
+          const p = 0.5 - 0.5*Math.cos(2*Math.PI*phase);
           const lat = dr.from.lat + (dr.to.lat - dr.from.lat)*p;
           const lng = dr.from.lng + (dr.to.lng - dr.from.lng)*p;
-          dr.marker.setLatLng([lat,lng]);
+          dr.marker.setLatLng([lat, lng]);
           dr._anim = requestAnimationFrame(step);
         };
         dr._anim = requestAnimationFrame(step);
@@ -205,7 +204,11 @@
         drones[idx] = null;
       }
 
-      // 6. Обработка клика по карте
+      // Экспортируем в глобальную область, чтобы inline-onclick их видел:
+      window.setHeading   = setHeading;
+      window.removeDrone  = removeDrone;
+
+      // 6. Клик по карте
       map.on('click', e => {
         if (!selected || !(selected in icons)) return;
         const rot = rotOffset[selected] ?? rotOffset.default;
@@ -260,7 +263,7 @@
         `).openPopup();
       });
 
-    });
+    }); // end DOMContentLoaded
   </script>
 
 </body>
