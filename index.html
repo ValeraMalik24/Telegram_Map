@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" href="favicon.png" />
 
-  <!-- Leaflet CSS (без integrity) -->
+  <!-- Leaflet CSS -->
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -16,13 +16,15 @@
   <link rel="stylesheet" href="style.css" />
 
   <style>
-    /* Если у вас нет внешнего style.css, можно вставить сюда */
+    /* Если в style.css нет этих правил, оставьте их здесь */
     html, body { margin:0; padding:0; }
-    #map { height:100vh; width:100vw; }
+    #map { width:100vw; height:100vh; }
+
     .menu {
-      position:absolute; bottom:10px; left:50%;
+      position:absolute;
+      bottom:10px; left:50%;
       transform:translateX(-50%);
-      background:rgba(255,255,255,.95);
+      background:rgba(255,255,255,0.95);
       padding:8px 12px;
       border-radius:8px;
       display:grid;
@@ -32,7 +34,7 @@
       max-width:640px;
       overflow-x:auto;
       scrollbar-width:none;
-      box-shadow:0 0 6px rgba(0,0,0,.25);
+      box-shadow:0 0 6px rgba(0,0,0,0.25);
       z-index:1000;
     }
     .menu::-webkit-scrollbar { display:none; }
@@ -42,19 +44,24 @@
       top:0; right:0;
       width:32px; height:100%;
       pointer-events:none;
-      background:linear-gradient(to right, rgba(255,255,255,0), rgba(0,0,0,.15));
+      background:linear-gradient(to right, rgba(255,255,255,0), rgba(0,0,0,0.15));
     }
     .menu-item { text-align:center; font:12px/1 sans-serif; }
     .menu-item button {
-      background:none; border:2px solid transparent;
-      border-radius:6px; padding:2px; margin-bottom:4px;
+      background:none;
+      border:2px solid transparent;
+      border-radius:6px;
+      padding:2px;
+      margin-bottom:4px;
       cursor:pointer;
     }
     .menu-item.selected button {
-      border-color:#007bff; box-shadow:0 0 4px #007bff;
+      border-color:#007bff;
+      box-shadow:0 0 4px #007bff;
     }
     .menu-item img {
-      width:36px; height:36px; border-radius:4px;
+      width:36px; height:36px;
+      border-radius:4px;
     }
   </style>
 </head>
@@ -95,9 +102,9 @@
     </div>
   </div>
 
-  <!-- Leaflet JS (без integrity) -->
+  <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <!-- rotatedMarker plugin -->
+  <!-- Плагин для повёрнутых маркеров -->
   <script src="https://cdn.jsdelivr.net/npm/leaflet-rotatedmarker@0.2.0/leaflet.rotatedMarker.js"></script>
 
   <script>
@@ -109,8 +116,8 @@
         attribution: '&copy; OpenStreetMap contributors'
       }).addTo(map);
 
-      // 2. Иконки
-      function ic(url, size) {
+      // 2. Создание иконок
+      function makeIcon(url, size) {
         return L.icon({
           iconUrl: url,
           iconSize: [size, size],
@@ -118,29 +125,29 @@
         });
       }
       const icons = {
-        shahed:   ic('shahed.png', 36),
-        shaheds:  ic('Shaheds.png', 72),
-        orlan:    ic('orlan.png', 36),
-        zala:     ic('zala.png', 36),
-        molniya:  ic('molniya.png', 36),
-        lancet:   ic('lancet.png', 36),
-        supercam: ic('supercam.png', 36),
-        kab:      ic('Kab.png', 72),
-        rocket:   ic('Rocket.png', 72),
-        "невідомий": ic('невідомий.png', 36)
+        shahed:   makeIcon('shahed.png', 36),
+        shaheds:  makeIcon('Shaheds.png', 72),
+        orlan:    makeIcon('orlan.png', 36),
+        zala:     makeIcon('zala.png', 36),
+        molniya:  makeIcon('molniya.png', 36),
+        lancet:   makeIcon('lancet.png', 36),
+        supercam: makeIcon('supercam.png', 36),
+        kab:      makeIcon('Kab.png', 72),
+        rocket:   makeIcon('Rocket.png', 72),
+        'невідомий': makeIcon('невідомий.png', 36)
       };
-      const arrowIcon = ic('arrow.png', 24);
-      const rotOff = { kab: 135, "невідомий": 0, default: 45 };
+      const arrowIcon = makeIcon('arrow.png', 24);
+      const rotOffset = { kab:135, 'невідомий':0, default:45 };
 
       // 3. Меню выбора
       const menu = document.getElementById('menu');
       let selected = null;
       menu.addEventListener('click', e => {
-        const it = e.target.closest('.menu-item');
-        if (!it) return;
+        const item = e.target.closest('.menu-item');
+        if (!item) return;
         menu.querySelectorAll('.menu-item').forEach(x => x.classList.remove('selected'));
-        it.classList.add('selected');
-        selected = it.dataset.type;
+        item.classList.add('selected');
+        selected = item.dataset.type;
       });
       menu.addEventListener('wheel', e => {
         if (e.deltaY) {
@@ -149,16 +156,15 @@
         }
       });
 
-      // 4. Гео-утилиты
+      // 4. Утилиты
       function bearing(a, b) {
         const φ1 = a.lat * Math.PI/180;
         const φ2 = b.lat * Math.PI/180;
-        const λ1 = a.lng * Math.PI/180;
-        const λ2 = b.lng * Math.PI/180;
-        const y = Math.sin(λ2-λ1) * Math.cos(φ2);
+        const Δλ = (b.lng - a.lng) * Math.PI/180;
+        const y = Math.sin(Δλ) * Math.cos(φ2);
         const x = Math.cos(φ1)*Math.sin(φ2)
-                - Math.sin(φ1)*Math.cos(φ2)*Math.cos(λ2-λ1);
-        return (Math.atan2(y, x) * 180/Math.PI + 360) % 360;
+                - Math.sin(φ1)*Math.cos(φ2)*Math.cos(Δλ);
+        return (Math.atan2(y,x)*180/Math.PI + 360) % 360;
       }
 
       // 5. Анимация
@@ -166,45 +172,43 @@
       const LOOP_MS = 6000;
       function startLoop(dr) {
         cancelAnimationFrame(dr._anim);
-        if (!dr.loopFrom || !dr.loopTo) return;
+        if (!dr.from || !dr.to) return;
         const step = ts => {
-          if (dr.dragBusy) {
+          if (dr.dragging) {
             dr._anim = requestAnimationFrame(step);
             return;
           }
-          const phase = (ts % LOOP_MS) / LOOP_MS;
-          const p = 0.5 - 0.5 * Math.cos(2 * Math.PI * phase);
-          const lat = dr.loopFrom.lat + (dr.loopTo.lat - dr.loopFrom.lat) * p;
-          const lng = dr.loopFrom.lng + (dr.loopTo.lng - dr.loopFrom.lng) * p;
-          dr.marker.setLatLng([lat, lng]);
+          const phase = (ts % LOOP_MS)/LOOP_MS;
+          const p = 0.5 - 0.5 * Math.cos(2*Math.PI*phase);
+          const lat = dr.from.lat + (dr.to.lat - dr.from.lat)*p;
+          const lng = dr.from.lng + (dr.to.lng - dr.from.lng)*p;
+          dr.marker.setLatLng([lat,lng]);
           dr._anim = requestAnimationFrame(step);
         };
         dr._anim = requestAnimationFrame(step);
       }
 
-      function setHeading(i, val) {
+      function setHeading(idx, val) {
         const v = parseFloat(val);
         if (isNaN(v)) return;
-        const d = drones[i];
-        d.marker.setRotationAngle(v - d.rot);
-        if (d.arrowHead) d.arrowHead.setRotationAngle(v - 90);
-        d.marker.closePopup();
+        const dr = drones[idx];
+        dr.marker.setRotationAngle(v - dr.rot);
+        if (dr.arrow) dr.arrow.setRotationAngle(v - 90);
+        dr.marker.closePopup();
       }
 
-      function del(i) {
-        const d = drones[i];
-        if (!d) return;
-        cancelAnimationFrame(d._anim);
-        [d.marker, d.shadow, d.line, d.arrowHead].forEach(layer => {
-          if (layer) map.removeLayer(layer);
-        });
-        drones[i] = null;
+      function removeDrone(idx) {
+        const dr = drones[idx];
+        if (!dr) return;
+        cancelAnimationFrame(dr._anim);
+        [dr.marker, dr.shadow, dr.line, dr.arrow].forEach(l => l && map.removeLayer(l));
+        drones[idx] = null;
       }
 
-      // 6. Добавление маркера по клику
+      // 6. Обработка клика по карте
       map.on('click', e => {
         if (!selected || !(selected in icons)) return;
-        const rot = rotOff[selected] ?? rotOff.default;
+        const rot = rotOffset[selected] ?? rotOffset.default;
         const marker = L.marker(e.latlng, {
           icon: icons[selected],
           draggable: true,
@@ -219,31 +223,30 @@
           marker,
           shadow,
           line,
-          arrowHead: null,
+          arrow: null,
           rot,
-          loopFrom: null,
-          loopTo: null,
-          _anim: 0,
-          dragBusy: false
+          from: null,
+          to: null,
+          dragging: false,
+          _anim: 0
         };
         drones.push(dr);
 
         let startPos;
         marker.on('dragstart', () => {
-          dr.dragBusy = true;
+          dr.dragging = true;
           startPos = marker.getLatLng();
         });
         marker.on('dragend', () => {
-          dr.dragBusy = false;
-          const endPos = marker.getLatLng();
-          dr.loopFrom = startPos;
-          dr.loopTo   = endPos;
-          shadow.setLatLngs([startPos, endPos]);
-          line.setLatLngs([startPos, endPos]);
-          if (dr.arrowHead) map.removeLayer(dr.arrowHead);
-          dr.arrowHead = L.rotatedMarker(startPos, {
+          dr.dragging = false;
+          dr.from = startPos;
+          dr.to   = marker.getLatLng();
+          shadow.setLatLngs([dr.from, dr.to]);
+          line.setLatLngs([dr.from, dr.to]);
+          if (dr.arrow) map.removeLayer(dr.arrow);
+          dr.arrow = L.rotatedMarker(dr.from, {
             icon: arrowIcon,
-            rotationAngle: bearing(startPos, endPos) - 90
+            rotationAngle: bearing(dr.from, dr.to) - 90
           }).addTo(map);
           startLoop(dr);
         });
@@ -253,11 +256,11 @@
           Курс:
           <input id="h_${idx}" type="number" min="0" max="359" value="0" style="width:60px">
           <button onclick="setHeading(${idx}, document.getElementById('h_${idx}').value)">OK</button><br>
-          <button onclick="del(${idx})">Видалити</button>
+          <button onclick="removeDrone(${idx})">Видалити</button>
         `).openPopup();
       });
 
-    }); // конец DOMContentLoaded
+    });
   </script>
 
 </body>
