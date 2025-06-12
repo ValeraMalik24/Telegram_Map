@@ -46,8 +46,8 @@
     }
 
     .menu-item img {
-      width: 32px;
-      height: 32px;
+      width: 36px;
+      height: 36px;
       border-radius: 4px;
     }
 
@@ -89,22 +89,11 @@
       border-radius: 4px;
       cursor: pointer;
     }
-
-    .watermark {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%) rotate(-30deg);
-      font-size: 32px;
-      color: rgba(0, 0, 0, 0.1);
-      z-index: 1;
-      pointer-events: none;
-      user-select: none;
-      white-space: nowrap;
-    }
   </style>
 </head>
 <body>
+
+<!-- Авторизація -->
 <div id="authModal" class="auth-modal">
   <div class="auth-content">
     <img src="logo.png" alt="Logo" class="auth-logo" />
@@ -115,9 +104,10 @@
   </div>
 </div>
 
+<!-- Мапа -->
 <div id="map"></div>
-<div class="watermark">t.me/Troyanda_INFO</div>
 
+<!-- Меню -->
 <div class="menu" id="menu">
   <div class="menu-item" data-type="shahed">
     <button><img src="shahed.png" /></button><span>Shahed</span>
@@ -137,11 +127,12 @@
   <div class="menu-item" data-type="supercam">
     <button><img src="supercam.png" /></button><span>Supercam</span>
   </div>
-  <div class="menu-item" data-type="nevdomiy">
+  <div class="menu-item" data-type="невідомий">
     <button><img src="невідомий.png" /></button><span>Невідомий</span>
   </div>
 </div>
 
+<!-- JS -->
 <script src="leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/bbecquet/Leaflet.RotatedMarker/leaflet.rotatedMarker.js"></script>
 <script>
@@ -152,7 +143,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 }).addTo(map);
 
 const icons = {
-  shahed:   L.icon({ iconUrl: 'shahed.png', iconSize: [36, 36] }),
+  shahed:   L.icon({ iconUrl: 'shahed.png', iconSize: [34, 34] }),
   orlan:    L.icon({ iconUrl: 'orlan.png', iconSize: [36, 36] }),
   zala:     L.icon({ iconUrl: 'zala.png', iconSize: [36, 36] }),
   molniya:  L.icon({ iconUrl: 'molniya.png', iconSize: [36, 36] }),
@@ -171,6 +162,14 @@ document.getElementById('menu').addEventListener('click', (e) => {
   item.classList.add('selected');
   selectedType = item.dataset.type;
 });
+
+function destinationPoint(lat, lon, brng, distKm) {
+  const R = 6371, d = distKm / R, b = brng * Math.PI / 180;
+  const lat1 = lat * Math.PI / 180, lon1 = lon * Math.PI / 180;
+  const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(b));
+  const lon2 = lon1 + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(lat1), Math.cos(d) - Math.sin(lat1) * Math.sin(lat2));
+  return [lat2 * 180 / Math.PI, lon2 * 180 / Math.PI];
+}
 
 map.on('click', e => {
   if (!selectedType || !icons[selectedType]) return;
@@ -213,15 +212,13 @@ map.on('click', e => {
 
   marker.bindPopup(popup).openPopup();
 });
-});
 
 function updateHeadingFromPopup(index) {
-  const input = document.getElementById("headingInput" + index);
-  const heading = parseFloat(input.value);
+  const heading = parseFloat(document.getElementById("headingInput").value);
   if (isNaN(heading)) return;
   const drone = drones[index];
   drone.heading = heading;
-  const correction = drone.marker.options.icon.options.iconUrl.includes('невідомий') ? 0 : -45;
+  const correction = (drone.type === 'невідомий') ? 0 : -45;
   drone.marker.setRotationAngle(heading + correction);
   updateHeading(drone);
   drone.marker.closePopup();
