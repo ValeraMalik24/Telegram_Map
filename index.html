@@ -172,7 +172,9 @@ function destinationPoint(lat, lon, brng, distKm) {
 }
 
 map.on('click', e => {
-  if (!selectedType || !icons[selectedType]) return;
+  if (!selectedType || !(selectedType in icons)) return;
+
+  const rotationOffset = selectedType === "невідомий" ? 0 : 45;
 
   const marker = L.rotatedMarker(e.latlng, {
     icon: icons[selectedType],
@@ -182,19 +184,10 @@ map.on('click', e => {
   }).addTo(map);
 
   const index = drones.length;
-  const drone = {
-    marker,
-    path: [],
-    arrow: null,
-    heading: 0,
-    lastPos: e.latlng,
-    type: selectedType
-  };
+  const drone = { marker, path: [], arrow: null, heading: 0, lastPos: e.latlng, offset: rotationOffset };
   drones.push(drone);
 
-  marker.on('dragstart', () => {
-    drone.lastPos = marker.getLatLng();
-  });
+  marker.on('dragstart', () => drone.lastPos = marker.getLatLng());
 
   marker.on('dragend', () => {
     const newPos = marker.getLatLng();
@@ -218,10 +211,10 @@ function updateHeadingFromPopup(index) {
   if (isNaN(heading)) return;
   const drone = drones[index];
   drone.heading = heading;
-  const correction = (drone.type === 'невідомий') ? 0 : -45;
-  drone.marker.setRotationAngle(heading + correction);
+  drone.marker.setRotationAngle(heading - drone.offset);
   updateHeading(drone);
   drone.marker.closePopup();
+}
 }
 
 function updateHeading(drone) {
