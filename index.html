@@ -5,25 +5,16 @@
   <title>Троянда ІНФО📡</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" href="favicon.png" />
-
-  <!-- Leaflet -->
   <link rel="stylesheet" href="leaflet.css" />
   <script src="leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/leaflet-rotatedmarker@0.2.0/leaflet.rotatedMarker.js"></script>
-
   <style>
     html,body{margin:0;padding:0}
     #map{height:100vh;width:100vw}
 
-    /* меню ---------------------------------------------------------------- */
-    .menu{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);
-      background:rgba(255,255,255,.95);padding:8px 12px;border-radius:8px;
-      display:grid;grid-auto-flow:column;grid-auto-columns:min-content;gap:12px;
-      max-width:640px;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none;
-      box-shadow:0 0 6px rgba(0,0,0,.25);z-index:1000}
+    .menu{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);background:rgba(255,255,255,.95);padding:8px 12px;border-radius:8px;display:grid;grid-auto-flow:column;grid-auto-columns:min-content;gap:12px;max-width:640px;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none;box-shadow:0 0 6px rgba(0,0,0,.25);z-index:1000}
     .menu::-webkit-scrollbar{display:none}
-    .menu::after{content:'';position:absolute;top:0;right:0;width:32px;height:100%;
-      pointer-events:none;background:linear-gradient(to right,rgba(255,255,255,0),rgba(0,0,0,.15))}
+    .menu::after{content:"";position:absolute;top:0;right:0;width:32px;height:100%;pointer-events:none;background:linear-gradient(to right,rgba(255,255,255,0),rgba(0,0,0,.15))}
     .menu-item{text-align:center;font:12px/1 sans-serif}
     .menu-item button{background:none;border:2px solid transparent;border-radius:6px;padding:2px;cursor:pointer;margin-bottom:4px}
     .menu-item.selected button{border-color:#007bff;box-shadow:0 0 4px #007bff}
@@ -32,8 +23,6 @@
 </head>
 <body>
 <div id="map"></div>
-
-<!-- меню -->
 <div id="menu" class="menu">
   <div class="menu-item" data-type="shahed"><button><img src="shahed.png"></button><span>Shahed</span></div>
   <div class="menu-item" data-type="shaheds"><button><img src="Shaheds.png"></button><span>Shaheds</span></div>
@@ -46,125 +35,45 @@
   <div class="menu-item" data-type="rocket"><button><img src="Rocket.png"></button><span>Ракета</span></div>
   <div class="menu-item" data-type="невідомий"><button><img src="невідомий.png"></button><span>Невідомий</span></div>
 </div>
-
 <script>
-/* ---------- 1. карта ---------- */
+/***** 1. Карта *****/
 const map=L.map('map').setView([49.9,36.3],10);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-  maxZoom:18,attribution:'&copy; OpenStreetMap',crossOrigin:null}).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'&copy; OSM',crossOrigin:null}).addTo(map);
 
-/* ---------- 2. іконки ---------- */
-function icon(url,s){return L.icon({iconUrl:url,iconSize:[s,s],iconAnchor:[s/2,s/2]});}
+/***** 2. Іконки *****/
+function ico(u,s){return L.icon({iconUrl:u,iconSize:[s,s],iconAnchor:[s/2,s/2]});}
 const icons={
-  shahed:icon('shahed.png',36), shaheds:icon('Shaheds.png',72),
-  orlan:icon('orlan.png',36), zala:icon('zala.png',36),
-  molniya:icon('molniya.png',36), lancet:icon('lancet.png',36),
-  supercam:icon('supercam.png',36),
-  kab:icon('Kab.png',72), rocket:icon('Rocket.png',72),
-  "невідомий":icon('невідомий.png',36)};
-const arrowIcon=icon('arrow.png',24);
+  shahed:ico('shahed.png',36),shaheds:ico('Shaheds.png',72),orlan:ico('orlan.png',36),zala:ico('zala.png',36),molniya:ico('molniya.png',36),lancet:ico('lancet.png',36),supercam:ico('supercam.png',36),kab:ico('Kab.png',72),rocket:ico('Rocket.png',72),"невідомий":ico('невідомий.png',36)};
+const arrowIcon=ico('arrow.png',24);
 const rotOff={kab:135,"невідомий":0,default:45};
 
-/* ---------- 3. стан ---------- */
-let selected=null;
-const drones=[];
-const MAX_TAIL=6;
-const LOOP_MS=6000;
+/***** 3. Стан *****/
+let selected=null;const drones=[];const MAX_TAIL=6;const LOOP_MS=6000;
 
-/* ---------- 4. меню ---------- */
+/***** 4. Меню *****/
 const menu=document.getElementById('menu');
-menu.addEventListener('click',e=>{
-  const it=e.target.closest('.menu-item');if(!it)return;
-  menu.querySelectorAll('.menu-item').forEach(x=>x.classList.remove('selected'));
-  it.classList.add('selected');selected=it.dataset.type;});
+menu.addEventListener('click',e=>{const i=e.target.closest('.menu-item');if(!i)return;menu.querySelectorAll('.menu-item').forEach(x=>x.classList.remove('selected'));i.classList.add('selected');selected=i.dataset.type;});
 menu.addEventListener('wheel',e=>{if(e.deltaY){e.preventDefault();menu.scrollLeft+=e.deltaY}});
 
-/* ---------- 5. геометрія ---------- */
-function bearing(a,b){
-  const φ1=a.lat*Math.PI/180, φ2=b.lat*Math.PI/180,
-        λ1=a.lng*Math.PI/180, λ2=b.lng*Math.PI/180;
-  const y=Math.sin(λ2-λ1)*Math.cos(φ2),
-        x=Math.cos(φ1)*Math.sin(φ2)-Math.sin(φ1)*Math.cos(φ2)*Math.cos(λ2-λ1);
-  return (Math.atan2(y,x)*180/Math.PI+360)%360;
-}
+/***** 5. Утиліти *****/
+function bearing(a,b){const φ1=a.lat*Math.PI/180,φ2=b.lat*Math.PI/180,λ1=a.lng*Math.PI/180,λ2=b.lng*Math.PI/180;const y=Math.sin(λ2-λ1)*Math.cos(φ2),x=Math.cos(φ1)*Math.sin(φ2)-Math.sin(φ1)*Math.cos(φ2)*Math.cos(λ2-λ1);return(Math.atan2(y,x)*180/Math.PI+360)%360;}
 
-/* ---------- 6. анімація ---------- */
-function startLoop(dr){
-  cancelAnimationFrame(dr._anim);
-  if(!dr.loopFrom||!dr.loopTo)return;
-  const step=(ts)=>{
-    if(dr.dragBusy){dr._anim=requestAnimationFrame(step);return;}
-    const phase=(ts%LOOP_MS)/LOOP_MS;                 // 0..1
-    const p=0.5-0.5*Math.cos(phase*2*Math.PI);        // 0→1→0 гладко
-    const lat=dr.loopFrom.lat+(dr.loopTo.lat-dr.loopFrom.lat)*p;
-    const lng=dr.loopFrom.lng+(dr.loopTo.lng-dr.loopFrom.lng)*p;
-    const cur=L.latLng(lat,lng);
+/***** 6. Анімація *****/
+function startLoop(dr){cancelAnimationFrame(dr._anim);if(!dr.loopFrom||!dr.loopTo)return;const step=ts=>{if(dr.dragBusy){dr._anim=requestAnimationFrame(step);return;}const ph=(ts%LOOP_MS)/LOOP_MS;const p=0.5-0.5*Math.cos(ph*2*Math.PI);const lat=dr.loopFrom.lat+(dr.loopTo.lat-dr.loopFrom.lat)*p;const lng=dr.loopFrom.lng+(dr.loopTo.lng-dr.loopFrom.lng)*p;const cur=L.latLng(lat,lng);dr.marker.setLatLng(cur);const tail=[dr.loopFrom,dr.loopTo];dr.shadow.setLatLngs(tail);dr.line.setLatLngs(tail);dr._anim=requestAnimationFrame(step);};dr._anim=requestAnimationFrame(step);}
 
-    dr.marker.setLatLng(cur);
+/***** 7. Курс *****/
+function setHeading(i,val){val=parseFloat(val);if(isNaN(val))return;const d=drones[i];d.heading=val;d.marker.setRotationAngle(val-d.rot);if(d.arrowHead)d.arrowHead.setRotationAngle(val-90);d.marker.closePopup();}
 
-    const tail=[...dr.pts.slice(-MAX_TAIL+1),cur];
-    dr.shadow.setLatLngs(tail);
-    dr.line.setLatLngs(tail);
+/***** 8. Додаємо ціль *****/
+map.on('click',e=>{if(!selected||!(selected in icons))return;const rot=rotOff[selected]??rotOff.default;const m=L.marker(e.latlng,{icon:icons[selected],draggable:true,rotationAngle:0,rotationOrigin:'center'}).addTo(map);const sh=L.polyline([e.latlng],{color:'#fff',weight:8,opacity:.6}).addTo(map);const ln=L.polyline([e.latlng],{color:'#000',weight:4}).addTo(map);const idx=drones.length;const dr={marker:m,shadow:sh,line:ln,arrowHead:null,rot,loopFrom:null,loopTo:null,_anim:0,dragBusy:false};drones.push(dr);
+let startPos;
+m.on('dragstart',()=>{dr.dragBusy=true;startPos=m.getLatLng();});
+m.on('dragend',()=>{dr.dragBusy=false;const endPos=m.getLatLng();dr.loopFrom=startPos;dr.loopTo=endPos;sh.setLatLngs([startPos,endPos]);ln.setLatLngs([startPos,endPos]);if(dr.arrowHead)map.removeLayer(dr.arrowHead);dr.arrowHead=L.rotatedMarker(startPos,{icon:arrowIcon,rotationAngle:bearing(startPos,endPos)-90}).addTo(map);startLoop(dr);});
 
-    dr._anim=requestAnimationFrame(step);
-  };
-  dr._anim=requestAnimationFrame(step);
-}
+m.bindPopup(`<b>${selected.toUpperCase()}</b><br>Курс: <input id="h_${idx}" type="number" min="0" max="359" value="0" style="width:60px"> <button onclick="setHeading(${idx},document.getElementById('h_${idx}').value)">OK</button><br><button onclick="del(${idx})">Видалити</button>`).openPopup();});
 
-/* ---------- 7. курс ---------- */
-function setHeading(i,val){
-  val=parseFloat(val); if(isNaN(val))return;
-  const d=drones[i]; d.heading=val;
-  d.marker.setRotationAngle(val-d.rot);
-  if(d.arrowHead) d.arrowHead.setRotationAngle(val-90);
-  d.marker.closePopup();
-}
-
-/* ---------- 8. додати ціль ---------- */
-map.on('click',e=>{
-  if(!selected||!(selected in icons))return;
-  const rot=rotOff[selected]??rotOff.default;
-  const m=L.marker(e.latlng,{icon:icons[selected],draggable:true,
-                             rotationAngle:0,rotationOrigin:'center'}).addTo(map);
-  const sh=L.polyline([e.latlng],{color:'#fff',weight:8,opacity:.6}).addTo(map);
-  const ln=L.polyline([e.latlng],{color:'#000',weight:4}).addTo(map);
-
-  const idx=drones.length;
-  const dr={marker:m,shadow:sh,line:ln,arrowHead:null,pts:[e.latlng],
-            rot,heading:undefined,loopFrom:null,loopTo:null,_anim:0,dragBusy:false};
-  drones.push(dr);
-
-  /* drag */
-  let startPos;
-  m.on('dragstart',()=>{dr.dragBusy=true;startPos=m.getLatLng();});
-  m.on('dragend',()=>{
-    dr.dragBusy=false;
-    const endPos=m.getLatLng();
-    dr.loopFrom=startPos; dr.loopTo=endPos;
-
-    if(dr.arrowHead) map.removeLayer(dr.arrowHead);
-    dr.arrowHead=L.rotatedMarker(dr.loopFrom,{icon:arrowIcon,
-       rotationAngle:bearing(dr.loopFrom,dr.loopTo)-90}).addTo(map);
-
-    dr.pts.push(endPos); while(dr.pts.length>MAX_TAIL)dr.pts.shift();
-    startLoop(dr);
-  });
-
-  /* pop-up */
-  m.bindPopup(`
-    <b>${selected.toUpperCase()}</b><br>
-    Курс: <input id="h_${idx}" type="number" min="0" max="359" value="0" style="width:60px">
-    <button onclick="setHeading(${idx},document.getElementById('h_${idx}').value)">OK</button><br>
-    <button onclick="del(${idx})">Видалити</button>`).openPopup();
-});
-
-/* ---------- 9. delete ---------- */
-function del(i){
-  const d=drones[i]; if(!d)return;
-  cancelAnimationFrame(d._anim);
-  [d.marker,d.shadow,d.line,d.arrowHead].forEach(l=>l&&map.removeLayer(l));
-  drones[i]=null;
-}
+/***** 9. Delete *****/
+function del(i){const d=drones[i];if(!d)return;cancelAnimationFrame(d._anim);[d.marker,d.shadow,d.line,d.arrowHead].forEach(l=>l&&map.removeLayer(l));drones[i]=null;}
 </script>
 </body>
 </html>
