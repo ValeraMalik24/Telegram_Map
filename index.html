@@ -5,7 +5,14 @@
   <title>Троянда ІНФО📡</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" type="image/png" href="favicon.png" />
+
+  <!-- Leaflet core -->
   <link rel="stylesheet" href="leaflet.css" />
+  <script src="leaflet.js"></script>
+
+  <!-- Плагін обертання маркерів (додає setRotationAngle/Origin до L.Marker) -->
+  <script src="https://cdn.jsdelivr.net/npm/leaflet-rotatedmarker@0.2.0/leaflet.rotatedMarker.js"></script>
+
   <style>
     html, body { margin: 0; padding: 0; }
     #map { height: 100vh; width: 100vw; }
@@ -55,6 +62,7 @@
 <body>
 <div id="map"></div>
 
+<!-- Меню вибору типу БпЛА -->
 <div class="menu" id="menu">
   <div class="menu-item" data-type="shahed">
     <button><img src="shahed.png" /></button><span>Shahed</span>
@@ -79,36 +87,41 @@
   </div>
 </div>
 
-<script src="leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/gh/bbecquet/Leaflet.RotatedMarker/leaflet.rotatedMarker.js"></script>
 <script>
+// 1. Ініціалізація карти
 const map = L.map('map').setView([49.9, 36.3], 10);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 18,
   attribution: '&copy; OpenStreetMap contributors'
 }).addTo(map);
 
+// 2. Конфігурація іконок
 const icons = {
-  shahed:   L.icon({ iconUrl: 'shahed.png', iconSize: [36, 36] }),
-  orlan:    L.icon({ iconUrl: 'orlan.png', iconSize: [36, 36] }),
-  zala:     L.icon({ iconUrl: 'zala.png', iconSize: [36, 36] }),
-  molniya:  L.icon({ iconUrl: 'molniya.png', iconSize: [36, 36] }),
-  lancet:   L.icon({ iconUrl: 'lancet.png', iconSize: [36, 36] }),
+  shahed:   L.icon({ iconUrl: 'shahed.png',   iconSize: [36, 36] }),
+  orlan:    L.icon({ iconUrl: 'orlan.png',    iconSize: [36, 36] }),
+  zala:     L.icon({ iconUrl: 'zala.png',     iconSize: [36, 36] }),
+  molniya:  L.icon({ iconUrl: 'molniya.png',  iconSize: [36, 36] }),
+  lancet:   L.icon({ iconUrl: 'lancet.png',   iconSize: [36, 36] }),
   supercam: L.icon({ iconUrl: 'supercam.png', iconSize: [36, 36] }),
   "невідомий": L.icon({ iconUrl: 'невідомий.png', iconSize: [36, 36] })
 };
 
+// 3. Змінні стану
 let selectedType = null;
 const drones = [];
 
-document.getElementById('menu').addEventListener('click', (e) => {
+// 4. Вибір типу БпЛА у меню
+const menu = document.getElementById('menu');
+menu.addEventListener('click', (e) => {
   const item = e.target.closest('.menu-item');
   if (!item) return;
+  // візуальне виділення
   document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('selected'));
   item.classList.add('selected');
   selectedType = item.dataset.type;
 });
 
+// 5. Обчислення точки за курсом/дистанцією (для стрілки прогнозу)
 function destinationPoint(lat, lon, brng, distKm) {
   const R = 6371, d = distKm / R, b = brng * Math.PI / 180;
   const lat1 = lat * Math.PI / 180, lon1 = lon * Math.PI / 180;
@@ -117,12 +130,16 @@ function destinationPoint(lat, lon, brng, distKm) {
   return [lat2 * 180 / Math.PI, lon2 * 180 / Math.PI];
 }
 
+// 6. Додавання БпЛА по кліку
 map.on('click', e => {
   if (!selectedType || !(selectedType in icons)) return;
 
+  // "невідомий" малюємо рівно, інші — з 45° зміщенням, аби вирівняти зображення
   const rotationOffset = selectedType === "невідомий" ? 0 : 45;
 
-  const marker = L.rotatedMarker(e.latlng, {
+  // --- ГОЛОВНЕ ВИПРАВЛЕННЯ ---
+  // Використовуємо L.marker замість неіснуючого L.rotatedMarker
+  const marker = L.marker(e.latlng, {
     icon: icons[selectedType],
     draggable: true,
     rotationAngle: 0,
@@ -142,9 +159,10 @@ map.on('click', e => {
     updateHeading(drone);
   });
 
+  // спливаюче вікно для введення кута
   const popup = L.popup().setContent(`
     <b>${selectedType.toUpperCase()}</b><br>
-    Курс (0–359°): <input id="headingInput" type="number" min="0" max="359" style="width: 60px;" value="0" /><br>
+    Курс (0–359°): <input id="headingInput_${index}" type="number" min="0" max="359" style="width: 60px;" value="0" /><br>
     <button onclick="updateHeadingFromPopup(${index})">OK</button>
     <button onclick="removeDrone(${index})">Видалити</button>
   `);
@@ -152,27 +170,33 @@ map.on('click', e => {
   marker.bindPopup(popup).openPopup();
 });
 
+// 7. Оновлення напрямку з попапу
 function updateHeadingFromPopup(index) {
-  const heading = parseFloat(document.getElementById("headingInput").value);
+  const input = document.getElementById(`headingInput_${index}`);
+  if (!input) return;
+  const heading = parseFloat(input.value);
   if (isNaN(heading)) return;
   const drone = drones[index];
+  if (!drone) return;
   drone.heading = heading;
   drone.marker.setRotationAngle(heading - drone.offset);
   updateHeading(drone);
   drone.marker.closePopup();
 }
 
+// 8. Малювання червоної стрілки прогнозу
 function updateHeading(drone) {
   if (drone.arrow) map.removeLayer(drone.arrow);
   const from = drone.marker.getLatLng();
-  const to = destinationPoint(from.lat, from.lng, drone.heading, 2);
+  const to = destinationPoint(from.lat, from.lng, drone.heading, 2); // 2 км
   drone.arrow = L.polyline([from, to], {
     color: 'red',
     weight: 4,
-    dashArray: "6,4"
+    dashArray: '6,4'
   }).addTo(map);
 }
 
+// 9. Видалення БпЛА
 function removeDrone(index) {
   const drone = drones[index];
   if (!drone) return;
