@@ -2,35 +2,40 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8" />
-  <title>Sky Kharkiv Map Alert</title>
+  <title>Троянда ІНФО📡</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" href="favicon.png" />
 
-  <!-- Leaflet core + додатковий плагін для повороту маркерів -->
+  <!-- Leaflet core + невеликий плагін для повороту маркерів -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/leaflet-rotatedmarker@0.2.0/leaflet.rotatedMarker.js"></script>
 
   <style>
-    html,body{margin:0;padding:0}
-    #map{width:100vw;height:100vh}
+    html,body { margin:0; padding:0 }
+    #map      { width:100vw; height:100vh }
 
-    /* нижня панель вибору типу БпЛА */
-    .menu{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);
-      background:rgba(255,255,255,.95);padding:8px 12px;border-radius:8px;
-      display:grid;grid-auto-flow:column;grid-auto-columns:min-content;gap:12px;
-      max-width:640px;overflow-x:auto;scrollbar-width:none;
-      box-shadow:0 0 6px rgba(0,0,0,.25);z-index:1000}
+    /* меню вибору типу БпЛА */
+    .menu {
+      position:absolute; bottom:10px; left:50%; transform:translateX(-50%);
+      background:rgba(255,255,255,.95); padding:8px 12px; border-radius:8px;
+      display:grid; grid-auto-flow:column; grid-auto-columns:min-content; gap:12px;
+      max-width:640px; overflow-x:auto; scrollbar-width:none;
+      box-shadow:0 0 6px rgba(0,0,0,.25); z-index:1000;
+    }
     .menu::-webkit-scrollbar{display:none}
-    .menu-item{text-align:center;font:12px/1 sans-serif}
-    .menu-item button{background:none;border:2px solid transparent;border-radius:6px;
-      padding:2px;margin-bottom:4px;cursor:pointer}
-    .menu-item.selected button{border-color:#007bff;box-shadow:0 0 4px #007bff}
-    .menu-item img{width:36px;height:36px;border-radius:4px}
+    .menu-item{text-align:center; font:12px/1 sans-serif}
+    .menu-item button{background:none; border:2px solid transparent; border-radius:6px;
+      padding:2px; margin-bottom:4px; cursor:pointer}
+    .menu-item.selected button{border-color:#007bff; box-shadow:0 0 4px #007bff}
+    .menu-item img{width:36px; height:36px; border-radius:4px}
 
-    /* тултіп висота / швидкість */
-    .drone-info{background:#fff;border:1px solid #ccc;border-radius:4px;
-      padding:2px 4px;font-size:11px;color:#000;box-shadow:0 0 2px rgba(0,0,0,.4)}
+    /* тултіп із висотою/швидкістю */
+    .drone-info{
+      background:#fff; border:1px solid #ccc; border-radius:4px;
+      padding:2px 4px; font-size:11px; color:#000;
+      box-shadow:0 0 2px rgba(0,0,0,.4);
+    }
   </style>
 </head>
 <body>
@@ -38,120 +43,168 @@
   <div id="menu" class="menu"></div>
 
 <script>
-/***************** CONFIG *****************/
-const TYPES=[
+/* === CONFIG === */
+const TYPES = [
   ['shahed',36],['shaheds',72],['orlan',36],['zala',36],['molniya',36],
   ['lancet',36],['supercam',36],['kab',72],['rocket',72],['невідомий',36]
 ];
-const ROT_OFFSET  = {kab:135,'невідомий':0,default:45};
-const PROJ_DIST   = 3000;    // прогноз 3 км
-const ANIM_MS     = 6000;    // цикл анімації
-const MAX_HISTORY = 6;       // зберігаємо 6 точок
-const LONG_MS     = 600;     // довге натискання (мс)
-/*******************************************/
+const ROT_OFFSET  = { kab:135, 'невідомий':0, default:45 };
+const PROJ_DIST   = 3000;   // прогноз-пунктир (м)
+const ANIM_MS     = 6000;   // цикл A->B (мс)
+const MAX_HISTORY = 6;      // зберігаємо 6 точок (п’ять старих + нова)
 
-let map=null;
-const drones=[];
-let selectedType=null;
-let activeIdx   =null;
+/* === globals === */
+let map        = null;
+const drones   = [];
+let selectedType = null;
+let activeIdx    = null;
 
 /* === helpers === */
 const icon=(n,s)=>L.icon({iconUrl:`${n}.png`,iconSize:[s,s],iconAnchor:[s/2,s/2]});
-function bearing(a,b){const r=Math.PI/180,φ1=a.lat*r,φ2=b.lat*r,dλ=(b.lng-a.lng)*r;const y=Math.sin(dλ)*Math.cos(φ2),x=Math.cos(φ1)*Math.sin(φ2)-Math.sin(φ1)*Math.cos(φ2)*Math.cos(dλ);return(Math.atan2(y,x)*180/Math.PI+360)%360;}
-function dest(pt,brg,dist){const R=6371000,δ=dist/R,θ=brg*Math.PI/180;const φ1=pt.lat*Math.PI/180,λ1=pt.lng*Math.PI/180;const φ2=Math.asin(Math.sin(φ1)*Math.cos(δ)+Math.cos(φ1)*Math.sin(δ)*Math.cos(θ));const λ2=λ1+Math.atan2(Math.sin(θ)*Math.sin(δ)*Math.cos(φ1),Math.cos(δ)-Math.sin(φ1)*Math.sin(φ2));return L.latLng(φ2*180/Math.PI,(λ2*180/Math.PI+540)%360-180);} 
+function bearing(a,b){
+  const r=Math.PI/180,φ1=a.lat*r,φ2=b.lat*r,dλ=(b.lng-a.lng)*r;
+  const y=Math.sin(dλ)*Math.cos(φ2),
+        x=Math.cos(φ1)*Math.sin(φ2)-Math.sin(φ1)*Math.cos(φ2)*Math.cos(dλ);
+  return (Math.atan2(y,x)*180/Math.PI+360)%360;
+}
+function dest(pt,brg,dist){
+  const R=6371000,δ=dist/R,θ=brg*Math.PI/180;
+  const φ1=pt.lat*Math.PI/180,λ1=pt.lng*Math.PI/180;
+  const φ2=Math.asin(Math.sin(φ1)*Math.cos(δ)+Math.cos(φ1)*Math.sin(δ)*Math.cos(θ));
+  const λ2=λ1+Math.atan2(Math.sin(θ)*Math.sin(δ)*Math.cos(φ1),
+                          Math.cos(δ)-Math.sin(φ1)*Math.sin(φ2));
+  return L.latLng(φ2*180/Math.PI, (λ2*180/Math.PI+540)%360-180);
+}
 
-/******** popup helpers ********/
+/* === popup helpers === */
 window.removeDrone = i => {
   const d=drones[i]; if(!d) return;
   cancelAnimationFrame(d._anim);
-  [d.marker,d.line,d.shadow,d.arrow,d.proj,d.tooltip].forEach(l=>l&&map.removeLayer(l));
+  [d.marker,d.shadow,d.line,d.arrow,d.proj,d.tooltip].forEach(l=>l&&map.removeLayer(l));
   drones[i]=null;
 };
 window.setParams = (i,a,s) => {
   const d=drones[i]; if(!d) return;
   d.alt  = +a || 0;
   d.speed= +s || 0;
-  const txt=`${d.alt} м / ${d.speed} км/ч`;
+  const txt = `${d.alt} м / ${d.speed} км/ч`;
   if(d.tooltip) d.tooltip.setContent(txt);
-  else d.tooltip=d.marker.bindTooltip(txt,{permanent:true,className:'drone-info',direction:'right',offset:[10,0]}).openTooltip();
+  else d.tooltip = d.marker.bindTooltip(txt,{
+           permanent:true, className:'drone-info',
+           direction:'right', offset:[10,0]
+         }).openTooltip();
   d.marker.closePopup();
 };
 
-/******** INIT ********/
+/* === init === */
 document.addEventListener('DOMContentLoaded',()=>{
   map=L.map('map').setView([49.9,36.3],10);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-    maxZoom:18, attribution:'© OpenStreetMap'
-  }).addTo(map);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+              {maxZoom:18, attribution:'© OpenStreetMap'}).addTo(map);
 
+  /* меню */
   const menu=document.getElementById('menu'), icons={};
   TYPES.forEach(([n,s])=>{
     icons[n]=icon(n,s);
     menu.insertAdjacentHTML('beforeend',
-      `<div class="menu-item" data-type="${n}"><button><img src="${n}.png"></button><span>${n}</span></div>`);
+      `<div class="menu-item" data-type="${n}">
+         <button><img src="${n}.png"></button><span>${n}</span>
+       </div>`);
   });
-  menu.onclick=e=>{
-    const it=e.target.closest('.menu-item'); if(!it)return;
+  menu.onclick = e=>{
+    const it=e.target.closest('.menu-item'); if(!it) return;
     menu.querySelectorAll('.menu-item').forEach(x=>x.classList.remove('selected'));
     it.classList.add('selected');
-    selectedType=it.dataset.type; activeIdx=null;
+    selectedType = it.dataset.type;
+    activeIdx = null;
   };
-  menu.onwheel=e=>{ if(e.deltaY){e.preventDefault();menu.scrollLeft+=e.deltaY;} };
+  menu.onwheel = e=>{ if(e.deltaY){e.preventDefault();menu.scrollLeft+=e.deltaY;} };
 
+  /* клік по карті */
   map.on('click',e=>{
-    if(typeof activeIdx==='number'){
-      addSegment(drones[activeIdx],e.latlng);
-      activeIdx=null; return;
+    if(typeof activeIdx==='number'){                // ставимо відрізок
+      const d = drones[activeIdx];
+      addSegment(d, e.latlng);
+      activeIdx = null;
+      return;
     }
-    if(selectedType){
-      addDrone(e.latlng,selectedType,icons[selectedType]);
+    if(selectedType){                               // ставимо новий дрон
+      addDrone(e.latlng, selectedType, icons[selectedType]);
       menu.querySelectorAll('.menu-item').forEach(x=>x.classList.remove('selected'));
-      selectedType=null;
+      selectedType = null;
     }
   });
 });
 
-/******** add drone ********/
+/* === add drone === */
 function addDrone(lat,type,icn){
-  const idx=drones.length;
-  const marker=L.marker(lat,{icon:icn,draggable:true,rotationOrigin:'center'}).addTo(map);
-  const shadow=L.polyline([], {color:'#fff',weight:4,opacity:.5,interactive:false}).addTo(map);
-  const line  =L.polyline([], {color:'#000',weight:2,interactive:false}).addTo(map);
-  const d={marker,shadow,line,arrow:null,proj:null,tooltip:null,longPressed:false,
-           rotOffset:ROT_OFFSET[type]??ROT_OFFSET.default,points:[lat],_anim:0,alt:0,speed:0};
+  const idx   = drones.length;
+  const marker= L.marker(lat,{icon:icn,draggable:true,rotationOrigin:'center'}).addTo(map);
+  const shadow= L.polyline([], {color:'#fff',weight:4,opacity:.5,interactive:false}).addTo(map);
+  const line  = L.polyline([], {color:'#000',weight:2,interactive:false}).addTo(map);
+
+  const d={marker,shadow,line,arrow:null,proj:null,tooltip:null,
+           rotOffset:ROT_OFFSET[type]??ROT_OFFSET.default,
+           points:[lat], _anim:0, alt:0, speed:0};
   drones.push(d);
 
-  /* drag handlers */
   marker.on('dragstart',()=>d.dragging=true);
-  marker.on('dragend',()=>{d.dragging=false;activeIdx=null;});
+  marker.on('dragend',  ()=>{d.dragging=false; activeIdx=null;});
+  marker.on('click',ev=>{activeIdx=idx; ev.originalEvent.stopPropagation();});
 
-  /* long-press detection */
-  let pressTimer;
-  function pressStart(){ pressTimer=setTimeout(()=>{ d.longPressed=true; marker.openPopup(); }, LONG_MS); }
-  function pressEnd(){ clearTimeout(pressTimer); }
-  marker.on('touchstart mousedown', pressStart, {passive:true});
-  marker.on('touchend touchmove mouseup mouseleave', pressEnd);
-
-  /* click behaviour */
-  marker.on('click', ev=>{
-    if(d.longPressed){ d.longPressed=false; return; }
-    activeIdx=idx; ev.originalEvent.stopPropagation();
-  });
-  marker.on('contextmenu', ()=>marker.openPopup());
-
-  /* popup html */
   marker.bindPopup(
-    `Висота: <input id='a${idx}' type='number' style='width:50px'>м<br>`+
-    `Швидкість: <input id='s${idx}' type='number' style='width:50px'>км/ч<br>`+
-    `<button onclick='setParams(${idx},a${idx}.value,s${idx}.value)'>OK</button><br>`+
-    `<button onclick='removeDrone(${idx})'>Видалити</button>`
-  );
+   `Висота: <input id="a${idx}" type="number" style="width:50px">м<br>
+    Швидкість: <input id="s${idx}" type="number" style="width:50px">км/ч<br>
+    <button onclick="setParams(${idx},a${idx}.value,s${idx}.value)">OK</button><br>
+    <button onclick="removeDrone(${idx})">Видалити</button>`);
 }
 
-/******** маршрут ********/
+/* === route logic === */
 function addSegment(d,newPt){
-  const prev=d.points[d.points.length-1];
+  const prev=d.points[d.points.length-1];      // попередня точка
   if(d.points.length>=MAX_HISTORY) d.points.shift();
   d.points.push(newPt);
 
-  d.line  .setLat
+  d.line  .setLatLngs(d.points);
+  d.shadow.setLatLngs(d.points);
+
+  const ang=bearing(prev,newPt);
+  d.marker.setRotationAngle?.(ang-d.rotOffset);
+
+  drawArrow(d,prev,newPt,ang);
+  drawProj(d,newPt,ang);
+  startAnim(d,prev,newPt);
+}
+
+function drawArrow(d,A,B,ang){
+  if(typeof L.rotatedMarker!=='function') return;
+  d.arrow && map.removeLayer(d.arrow);
+  const mid=L.latLng((A.lat+B.lat)/2,(A.lng+B.lng)/2);
+  d.arrow=L.rotatedMarker(mid,{
+    icon:icon('arrow',24),
+    rotationAngle:ang-90,
+    interactive:false
+  }).addTo(map);
+}
+
+function drawProj(d,from,ang){
+  d.proj && map.removeLayer(d.proj);
+  d.proj=L.polyline([from,dest(from,ang,PROJ_DIST)],
+    {color:'#f00',weight:1,dashArray:'6 6',interactive:false}).addTo(map);
+}
+
+function startAnim(d,A,B){
+  cancelAnimationFrame(d._anim);
+  const run=t=>{
+    const p=((t)%ANIM_MS)/ANIM_MS;
+    d.marker.setLatLng([
+      A.lat + (B.lat-A.lat)*p,
+      A.lng + (B.lng-A.lng)*p
+    ]);
+    d._anim=requestAnimationFrame(run);
+  };
+  d._anim=requestAnimationFrame(run);
+}
+</script>
+</body>
+</html>
