@@ -6,14 +6,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="favicon.png">
 
-  <!-- Leaflet (core + плагін повороту маркерів) -->
+  <!-- Leaflet core -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/leaflet-rotatedmarker@0.2.0/leaflet.rotatedMarker.js"></script>
+
+  <!-- Плагін повороту маркерів -->
+  <script src="https://cdn.jsdelivr.net/npm/leaflet-rotatedmarker@0.2.0/leaflet.rotatedMarker.js"></script>
 
   <style>
     html,body{margin:0;padding:0}
     #map{width:100vw;height:100vh}
+
     .menu{
       position:absolute;bottom:10px;left:50%;transform:translateX(-50%);
       background:rgba(255,255,255,.95);padding:8px 12px;border-radius:8px;
@@ -33,21 +36,18 @@
   <div id="menu" class="menu"></div>
 
 <script>
-/* ---------- Конфіг ---------- */
+/* ------------ Конфіг ------------ */
 const TYPES=[
   ['shahed',36],['shaheds',72],['orlan',36],['zala',36],['molniya',36],
   ['lancet',36],['supercam',36],['kab',72],['rocket',72],['невідомий',36]];
 const ROT_OFFSET={kab:135,'невідомий':0,default:45};
-const ANIM_MS=6000;           // цикл руху A→B
-const PROJ_DIST=3000;         // пунктир-прогноз 3 км
+const ANIM_MS=6000;
+const PROJ_DIST=3000;   // прогноз-пунктир 3 км
 
-/* ---------- Глобальні ---------- */
-let map=null;
-const drones=[];
-let selectedType=null;        // вибрано в меню
-let activeIdx=null;           // дрон, якому задаємо курс
+/* ------------ Глобальні ------------ */
+let map=null, drones=[], selectedType=null, activeIdx=null;
 
-/* ---------- Утиліти ---------- */
+/* ------------ Утиліти ------------ */
 const icon=(n,s)=>L.icon({iconUrl:`${n}.png`,iconSize:[s,s],iconAnchor:[s/2,s/2]});
 function bearing(a,b){
   const r=Math.PI/180,φ1=a.lat*r,φ2=b.lat*r,dλ=(b.lng-a.lng)*r;
@@ -64,26 +64,23 @@ function dest(pt,brg,dist){
   return L.latLng(φ2*180/Math.PI,(λ2*180/Math.PI+540)%360-180);
 }
 
-/* ---------- Popup-допоміжні ---------- */
+/* ------------ Popup-допоміжні ------------ */
 window.removeDrone=i=>{
   const d=drones[i]; if(!d) return;
   cancelAnimationFrame(d._anim);
-  [d.marker,d.line,d.shadow,d.arrow,d.proj].forEach(l=>l && map.removeLayer(l));
+  [d.marker,d.line,d.shadow,d.arrow,d.proj].forEach(l=>l&&map.removeLayer(l));
   drones[i]=null;
 };
 window.setParams=(i,a,s)=>{
-  const d=drones[i]; if(!d) return;
-  d.alt=+a||0; d.speed=+s||0; d.marker.closePopup();
+  const d=drones[i]; if(d){d.alt=+a||0; d.speed=+s||0; d.marker.closePopup();}
 };
 
-/* ---------- Ініціалізація ---------- */
+/* ------------ Ініціалізація ------------ */
 document.addEventListener('DOMContentLoaded',()=>{
-  /* карта */
   map=L.map('map').setView([49.9,36.3],10);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
               {maxZoom:18,attribution:'© OpenStreetMap'}).addTo(map);
 
-  /* меню */
   const menu=document.getElementById('menu'), icons={};
   TYPES.forEach(([n,s])=>{
     icons[n]=icon(n,s);
@@ -99,12 +96,10 @@ document.addEventListener('DOMContentLoaded',()=>{
   };
   menu.onwheel=e=>{if(e.deltaY){e.preventDefault();menu.scrollLeft+=e.deltaY;}};
 
-  /* клік по карті */
   map.on('click',e=>{
     if(typeof activeIdx==='number'){
       const d=drones[activeIdx];
-      setCourse(d,d.marker.getLatLng(),e.latlng);
-      activeIdx=null; return;
+      setCourse(d,d.marker.getLatLng(),e.latlng); activeIdx=null; return;
     }
     if(selectedType){
       addDrone(e.latlng,selectedType,icons[selectedType]);
@@ -114,15 +109,16 @@ document.addEventListener('DOMContentLoaded',()=>{
   });
 });
 
-/* ---------- Додати дрон ---------- */
+/* ------------ Додати дрон ------------ */
 function addDrone(lat,type,icn){
   const idx=drones.length;
   const marker=L.marker(lat,{icon:icn,draggable:true,rotationOrigin:'center'}).addTo(map);
   const shadow=L.polyline([], {color:'#fff',weight:4,opacity:.5,interactive:false}).addTo(map);
-  const line  =L.polyline([], {color:'#000',weight:2,interactive:false}).addTo(map);
+  const line=L.polyline([], {color:'#000',weight:2,interactive:false}).addTo(map);
 
   const d={marker,shadow,line,arrow:null,proj:null,
-           rotOffset:ROT_OFFSET[type]??ROT_OFFSET.default,path:[lat],alt:0,speed:0,_anim:0};
+           rotOffset:ROT_OFFSET[type]??ROT_OFFSET.default,
+           path:[lat],alt:0,speed:0,_anim:0};
   drones.push(d);
 
   marker.on('dragstart',()=>d.dragging=true);
@@ -136,7 +132,7 @@ function addDrone(lat,type,icn){
     <button onclick="removeDrone(${idx})">Видалити</button>`);
 }
 
-/* ---------- Курс, прогноз, анімація ---------- */
+/* ------------ Курс / прогноз / анімація ------------ */
 function setCourse(d,A,B){
   d.path=[A,B]; d.line.setLatLngs(d.path); d.shadow.setLatLngs(d.path);
   const ang=bearing(A,B);
@@ -144,15 +140,16 @@ function setCourse(d,A,B){
   drawArrow(d,A,B,ang); drawProj(d,B,ang); startAnim(d,A,B);
 }
 function drawArrow(d,A,B,ang){
-  d.arrow && map.removeLayer(d.arrow);
+  if(typeof L.rotatedMarker!=='function') return;        // fallback
+  d.arrow&&map.removeLayer(d.arrow);
   const mid=L.latLng((A.lat+B.lat)/2,(A.lng+B.lng)/2);
   d.arrow=L.rotatedMarker(mid,{icon:icon('arrow',24),
-          rotationAngle:ang-90,interactive:false}).addTo(map);
+            rotationAngle:ang-90,interactive:false}).addTo(map);
 }
 function drawProj(d,from,ang){
-  d.proj && map.removeLayer(d.proj);
+  d.proj&&map.removeLayer(d.proj);
   d.proj=L.polyline([from,dest(from,ang,PROJ_DIST)],
-         {color:'#000',weight:1,dashArray:'6 6',interactive:false}).addTo(map);
+        {color:'#000',weight:1,dashArray:'6 6',interactive:false}).addTo(map);
 }
 function startAnim(d,A,B){
   cancelAnimationFrame(d._anim);
