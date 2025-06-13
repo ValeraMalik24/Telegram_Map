@@ -2,11 +2,11 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8" />
-  <title>Sky Kharkiv Map Alert</title>
+  <title>Sky Kharkiv Map Alert</title>              <!-- ✦ нова назва вкладки -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" href="favicon.png" />
 
-  <!-- Leaflet core -->
+  <!-- Leaflet core + маленький плагін повороту -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/leaflet-rotatedmarker@0.2.0/leaflet.rotatedMarker.js"></script>
@@ -15,12 +15,14 @@
     html,body{margin:0;padding:0}
     #map{width:100vw;height:100vh}
 
+    /* меню вибору типу БпЛА */
     .menu{
       position:absolute;bottom:10px;left:50%;transform:translateX(-50%);
       background:rgba(255,255,255,.95);padding:8px 12px;border-radius:8px;
       display:grid;grid-auto-flow:column;grid-auto-columns:min-content;gap:12px;
       max-width:640px;overflow-x:auto;scrollbar-width:none;
-      box-shadow:0 0 6px rgba(0,0,0,.25);z-index:1000}
+      box-shadow:0 0 6px rgba(0,0,0,.25);z-index:1000
+    }
     .menu::-webkit-scrollbar{display:none}
     .menu-item{text-align:center;font:12px/1 sans-serif}
     .menu-item button{background:none;border:2px solid transparent;border-radius:6px;
@@ -28,10 +30,10 @@
     .menu-item.selected button{border-color:#007bff;box-shadow:0 0 4px #007bff}
     .menu-item img{width:36px;height:36px;border-radius:4px}
 
+    /* тултіп висота / швидкість */
     .drone-info{
       background:#fff;border:1px solid #ccc;border-radius:4px;
-      padding:2px 4px;font-size:11px;color:#000;
-      box-shadow:0 0 2px rgba(0,0,0,.4)
+      padding:2px 4px;font-size:11px;color:#000;box-shadow:0 0 2px rgba(0,0,0,.4)
     }
   </style>
 </head>
@@ -40,29 +42,28 @@
   <div id="menu" class="menu"></div>
 
 <script>
-/******** PASSWORD (4202) ********/
+/************ SIMPLE PASSWORD GATE ************/
 if(prompt('Введіть пароль')!=='4202'){
   document.body.innerHTML='<h2 style="text-align:center;margin-top:40vh">Невірний пароль</h2>';
-  throw new Error('Bad password');
+  throw new Error('Bad password – зупиняємо скрипт');
 }
-
-/******** CONFIG ********/
+/************ CONFIG ****************/
 const TYPES=[
   ['shahed',36],['shaheds',72],['orlan',36],['zala',36],['molniya',36],
   ['lancet',36],['supercam',36],['kab',72],['rocket',72],['невідомий',36]
 ];
-const ROT_OFFSET={kab:135,'невідомий':0,default:45};
-const PROJ_DIST   =3000;
-const ANIM_MS     =6000;
-const MAX_HISTORY =6;
-const LONG_MS     =600;
+const ROT_OFFSET  ={kab:135,'невідомий':0,default:45};
+const PROJ_DIST   =3000;   // прогноз-пунктир (м)
+const ANIM_MS     =6000;   // цикл A→B (мс)
+const MAX_HISTORY =6;      // 6 точок
+const LONG_MS     =600;    // long-press (мс)
+/**********************************************/
 
-/******** globals ********/
 let map=null;
 const drones=[];
 let selectedType=null, activeIdx=null;
 
-/******** helpers ********/
+/* helpers */
 const icon=(n,s)=>L.icon({iconUrl:`${n}.png`,iconSize:[s,s],iconAnchor:[s/2,s/2]});
 function bearing(a,b){
   const r=Math.PI/180,φ1=a.lat*r,φ2=b.lat*r,dλ=(b.lng-a.lng)*r;
@@ -79,15 +80,15 @@ function dest(pt,brg,dist){
   return L.latLng(φ2*180/Math.PI,(λ2*180/Math.PI+540)%360-180);
 }
 
-/******** popup helpers ********/
+/* popup helpers */
 window.removeDrone=i=>{
-  const d=drones[i]; if(!d) return;
+  const d=drones[i]; if(!d)return;
   cancelAnimationFrame(d._anim);
   [d.marker,d.shadow,d.line,d.arrow,d.proj,d.tooltip].forEach(l=>l&&map.removeLayer(l));
   drones[i]=null;
 };
 window.setParams=(i,a,s)=>{
-  const d=drones[i]; if(!d) return;
+  const d=drones[i]; if(!d)return;
   d.alt=+a||0; d.speed=+s||0;
   const txt=`${d.alt} м / ${d.speed} км/ч`;
   if(d.tooltip) d.tooltip.setContent(txt);
@@ -96,12 +97,13 @@ window.setParams=(i,a,s)=>{
   d.marker.closePopup();
 };
 
-/******** init ********/
+/* init */
 document.addEventListener('DOMContentLoaded',()=>{
   map=L.map('map').setView([49.9,36.3],10);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
               {maxZoom:18,attribution:'© OpenStreetMap'}).addTo(map);
 
+  /* меню */
   const menu=document.getElementById('menu'), icons={};
   TYPES.forEach(([n,s])=>{
     icons[n]=icon(n,s);
@@ -111,7 +113,7 @@ document.addEventListener('DOMContentLoaded',()=>{
        </div>`);
   });
   menu.onclick=e=>{
-    const it=e.target.closest('.menu-item'); if(!it) return;
+    const it=e.target.closest('.menu-item'); if(!it)return;
     menu.querySelectorAll('.menu-item').forEach(x=>x.classList.remove('selected'));
     it.classList.add('selected');
     selectedType=it.dataset.type; activeIdx=null;
@@ -128,7 +130,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   });
 });
 
-/******** add drone ********/
+/* add drone */
 function addDrone(lat,type,icn){
   const idx=drones.length;
   const marker=L.marker(lat,{icon:icn,draggable:true,rotationOrigin:'center'}).addTo(map);
@@ -140,39 +142,77 @@ function addDrone(lat,type,icn){
            points:[lat],_anim:0,alt:0,speed:0};
   drones.push(d);
 
-  /* drag */
   marker.on('dragstart',()=>d.dragging=true);
   marker.on('dragend',()=>{d.dragging=false;activeIdx=null;});
 
-  /* простий клік (форма теж відкриється) */
-  marker.on('click',ev=>{
-    activeIdx=idx;
-    d.longPressed=false;          // скидаємо прапор
-    ev.originalEvent.stopPropagation();
-  });
-
-  /* long-press */
+  /* long-press detection */
   let timer;
-  const start=()=>{timer=setTimeout(()=>{d.longPressed=true;marker.openPopup();},LONG_MS);};
-  const stop =()=>clearTimeout(timer);
-  marker.on('touchstart mousedown',start,{passive:true});
-  marker.on('touchend touchmove mouseup mouseleave',stop);
+  function pressStart(){ timer=setTimeout(()=>{ d.longPressed=true; marker.openPopup(); }, LONG_MS); }
+  function pressEnd()  { clearTimeout(timer); }
 
+  marker.on('touchstart mousedown', pressStart, {passive:true});
+  marker.on('touchend touchmove mouseup mouseleave', pressEnd);
+
+  /* click / ПКМ */
+  marker.on('click',ev=>{
+    if(d.longPressed){ d.longPressed=false; return; }
+    activeIdx=idx; ev.originalEvent.stopPropagation();
+  });
   marker.on('contextmenu',()=>marker.openPopup());
 
+  /* popup HTML */
   marker.bindPopup(
    `Висота: <input id='a${idx}' type='number' style='width:50px'>м<br>
     Швидкість: <input id='s${idx}' type='number' style='width:50px'>км/ч<br>
-    <button onclick=\"setParams(${idx},a${idx}.value,s${idx}.value)\">OK</button><br>
-    <button onclick=\"removeDrone(${idx})\">Видалити</button>`
+    <button onclick='setParams(${idx},a${idx}.value,s${idx}.value)'>OK</button><br>
+    <button onclick='removeDrone(${idx})'>Видалити</button>`
   );
 }
 
-/******** route ********/
+/* маршрут */
 function addSegment(d,newPt){
   const prev=d.points[d.points.length-1];
   if(d.points.length>=MAX_HISTORY) d.points.shift();
   d.points.push(newPt);
 
   d.line  .setLatLngs(d.points);
-  d.shadow.setLatLngs
+  d.shadow.setLatLngs(d.points);
+
+  const ang=bearing(prev,newPt);
+  d.marker.setRotationAngle?.(ang-d.rotOffset);
+
+  drawArrow(d,prev,newPt,ang);
+  drawProj (d,newPt,ang);
+  startAnim(d,prev,newPt);
+}
+
+function drawArrow(d,A,B,ang){
+  if(typeof L.rotatedMarker!=='function') return;
+  d.arrow && map.removeLayer(d.arrow);
+  const mid=L.latLng((A.lat+B.lat)/2,(A.lng+B.lng)/2);
+  d.arrow=L.rotatedMarker(mid,{
+    icon:icon('arrow',24),
+    rotationAngle:ang-90,
+    interactive:false
+  }).addTo(map);
+}
+function drawProj(d,from,ang){
+  d.proj && map.removeLayer(d.proj);
+  d.proj=L.polyline([from,dest(from,ang,PROJ_DIST)],
+    {color:'#f00',weight:1,dashArray:'6 6',interactive:false}).addTo(map);
+}
+function startAnim(d,A,B){
+  cancelAnimationFrame(d._anim);
+  const run=t=>{
+    const p=((t)%ANIM_MS)/ANIM_MS;
+    d.marker.setLatLng([
+      A.lat + (B.lat-A.lat)*p,
+      A.lng + (B.lng-A.lng)*p
+    ]);
+    d._anim=requestAnimationFrame(run);
+  };
+  d._anim=requestAnimationFrame(run);
+}
+</script>
+</body>
+</html>
